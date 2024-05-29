@@ -1,14 +1,4 @@
 
-install.packages("data.table")
-install.packages("dplyr")
-install.packages("ggplot2")
-install.packages("ggforce")
-install.packages("tableone")
-install.packages("survminer")
-install.packages("MatchIt")
-install.packages("devtools")
-install.packages("cli")
-
 
 library(tidyverse)
 library(dplyr)
@@ -357,7 +347,7 @@ surv <- surv[complete.cases(surv$T.x), ]
 # writing this surv file out so it can be used in the RAP to run the actual
 # models
 
-write.csv(surv, "CAD_SURV.csv", row.names = TRUE)
+write.csv(surv, "CAD_SURV", row.names = TRUE)
 
 # NEED TO COME BACK TO THIS AND CHECK IF WE CAN INCORPORATE THE ICD-9 CODES
 # BUT I DON'T THINK IT WILL MAKE MUCH DIFFERENCE BECAUSE THE EARLIEST DATE 
