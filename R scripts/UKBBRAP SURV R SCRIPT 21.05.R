@@ -356,6 +356,7 @@ surv$age_group <- cut(surv$AGERECRUIT,
                            right = FALSE)
 
 
+
 # having a look at testosterone deficiency in different age groups
 
 surv$age_group <- cut(surv$AGERECRUIT,
@@ -364,21 +365,36 @@ surv$age_group <- cut(surv$AGERECRUIT,
                            right = FALSE)
 
 
+
+
+# calculating quintiles of t for each age group
+
+summary_stats <- surv %>%
+  group_by(age_group) %>%
+  summarize(
+    median_T_x = median(T.x, na.rm = TRUE),
+    lower_quartile_T_x = quantile(T.x, 0.25, na.rm = TRUE),
+    upper_quartile_T_x = quantile(T.x, 0.75, na.rm = TRUE)
+  )
+
+
+
+
 surv <- surv %>%
   mutate(
     T_levels = case_when(
-      age_group == "40-50" & T.x < 8.74 ~ "deficient",
-      age_group == "40-50" & T.x >= 8.74 & T.x <= 12 ~ "sufficient",
-      age_group == "40-50" & T.x > 12 ~ "high",
-      age_group == "50-60" & T.x < 7.47 ~ "deficient",
-      age_group == "50-60" & T.x >= 7.47 & T.x <= 10 ~ "sufficient",
-      age_group == "50-60" & T.x > 10 ~ "high",
-      age_group == "60-70" & T.x < 6.80 ~ "deficient",
-      age_group == "60-70" & T.x >= 6.80 & T.x <= 9 ~ "sufficient",
-      age_group == "60-70" & T.x > 9 ~ "high",
-      age_group == "70+" & T.x < 5.41 ~ "deficient",
-      age_group == "70+" & T.x >= 5.41 & T.x <= 8 ~ "sufficient",
-      age_group == "70+" & T.x > 8 ~ "high",
+      age_group == "40-50" & T.x < 9.64 ~ "LQ",
+      age_group == "40-50" & T.x >= 9.64 & T.x <= 14.43 ~ "IQR",
+      age_group == "40-50" & T.x > 14.43 ~ "UQ",
+      age_group == "50-60" & T.x < 9.24 ~ "LQ",
+      age_group == "50-60" & T.x >= 9.24 & T.x <= 13.9 ~ "IQR",
+      age_group == "50-60" & T.x > 13.9 ~ "UQ",
+      age_group == "60-70" & T.x < 9.1 ~ "LQ",
+      age_group == "60-70" & T.x >= 9.1 & T.x <= 13.7 ~ "IQR",
+      age_group == "60-70" & T.x > 13.7 ~ "UQ",
+      age_group == "70+" & T.x < 9.2 ~ "LQ",
+      age_group == "70+" & T.x >= 9.2 & T.x <= 13.5 ~ "IQR",
+      age_group == "70+" & T.x > 13.5 ~ "UQ",
       TRUE ~ NA_character_
     )
   )
@@ -390,8 +406,8 @@ surv <- surv %>%
 
 table(surv$T_levels, surv$age_group)
 
-surv$T_levels <- factor(surv$T_levels, levels = c("deficient", "sufficient", "high"))
-surv$T_levels <- relevel(surv$T_levels, ref = "sufficient")
+surv$T_levels <- factor(surv$T_levels, levels = c("LQ", "IQR", "UQ"))
+surv$T_levels <- relevel(surv$T_levels, ref = "IQR")
 
 
 ## creating new dataframes for each age group 
@@ -462,7 +478,6 @@ summary(km1, censored = T)
 
 plot(km1, col = 1:3, lty = 1:3, xlab = "Time", ylab = "Survival Probability")
 legend("bottomright", legend = levels(surv_70_plus$T_levels), col = 1:3, lty = 1:3, title = "T_levels")
-
 
 
 
