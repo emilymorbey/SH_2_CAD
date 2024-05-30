@@ -18,6 +18,8 @@ library(data.table)
 # reading in the file which has all the covariates that we want to control for 
 # including the survivor variables like age of recruitment etc. 
 
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files/TestosteroneCAD")
+
 surv <- read.csv("data_participant_surv_2.csv")
 
 colnames(surv) <- c("IID", "T", "CAD", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", "LTF", "DATEASSESSMENT")
@@ -338,7 +340,28 @@ table(surv$censdate)
 surv$timetoEVENT <- ifelse(is.na(surv$timetoCENSOR), surv$timetoCAD, surv$timetoCENSOR)
 
 # create a variable for testosterone deficiency 
-surv$testosterone_deficiency <- ifelse(surv$T.x < 12, 1, 0)
+surv$testosterone_deficiency_broad <- ifelse(surv$T.x < 12, 1, 0)
+
+
+# having a look without complete cases at age bin specific stuff 
+# want to group the men by age and have a line for t deficient, t sufficient, and high t 
+# group into 10 year age bins and look at the relationship 
+# we do need to keep men which have complete information on testosterone and CAD though 
+
+View(surv)
+
+surv$age_group <- cut(surv$AGERECRUIT1,
+                           breaks = c(-Inf, 50, 60, 70, Inf),
+                           labels = c("40-50", "50-60", "60-70", "70+"),
+                           right = FALSE)
+
+
+
+
+
+
+
+
 
 # need complete cases for testosterone deficiency 
 surv <- surv[complete.cases(surv$T.x), ]
