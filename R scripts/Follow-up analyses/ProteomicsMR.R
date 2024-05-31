@@ -57,4 +57,25 @@ print(results_df)
 
 
 
+olinkid <- read.csv("OLINKIDS.csv", header = TRUE)
+olinkname <- read.csv("OLINKNAMES.csv", header = TRUE)
+
+
+olink <- merge(olinkid, olinkname, by = "ID")
+
+files <- read.delim("Male_OL_Biobank_T_MR.txt")
+
+
+files$Olink.ID <- sub(".*_(.*?)\\..*", "\\1", files$File)
+
+olink_hits <- merge(files, olink, by = "Olink.ID")
+
+olink_med_hits <- olink_hits %>% filter(P_Value < 0.00005)
+olink_sig_hits <- olink_hits %>% filter(P_Value < 0.00000005)
+
+
+
+write.table(olink_med_hits, "olinkmedhits.tsv", sep = "\t", row.names = TRUE)
+write.table(olink_sig_hits, "olinksighits.tsv", sep = "\t", row.names = TRUE) 
+
 
