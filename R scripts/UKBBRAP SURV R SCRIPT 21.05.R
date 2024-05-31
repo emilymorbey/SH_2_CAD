@@ -481,6 +481,133 @@ legend("bottomright", legend = levels(surv_70_plus$T_levels), col = 1:3, lty = 1
 
 
 
+# repeating the steps above but using each quartile individually
+# to plot 4 lines instead of 3 
+
+# calculating quintiles of t for each age group
+
+summary_stats <- surv %>%
+  group_by(age_group) %>%
+  summarize(
+    median_T_x = median(T.x, na.rm = TRUE),
+    lower_quartile_T_x = quantile(T.x, 0.25, na.rm = TRUE),
+    upper_quartile_T_x = quantile(T.x, 0.75, na.rm = TRUE)
+  )
+
+print(summary_stats)
+
+
+surv <- surv %>%
+  mutate(
+    T_levels = case_when(
+      age_group == "40-50" & T.x < 9.64 ~ "Q1",
+      age_group == "40-50" & T.x >= 9.64 & T.x < 11.9 ~ "Q2",
+      age_group == "40-50" & T.x >= 11.9 & T.x < 14.4 ~ "Q3",
+      age_group == "40-50" & T.x >= 14.4 ~ "Q4",
+      age_group == "50-60" & T.x < 9.24 ~ "Q1",
+      age_group == "50-60" & T.x >= 9.24 & T.x < 11.5 ~ "Q2",
+      age_group == "50-60" & T.x >= 11.5 & T.x < 13.9 ~ "Q3",
+      age_group == "50-60" & T.x >= 13.9 ~ "Q4",
+      age_group == "60-70" & T.x < 9.1 ~ "Q1",
+      age_group == "60-70" & T.x >= 9.1 & T.x < 11.3 ~ "Q2",
+      age_group == "60-70" & T.x >= 11.3 & T.x < 13.7 ~ "Q3",
+      age_group == "60-70" & T.x >= 13.7 ~ "Q4",
+      age_group == "70+" & T.x < 9.2 ~ "Q1",
+      age_group == "70+" & T.x >= 9.2 & T.x < 11.6 ~ "Q2",
+      age_group == "70+" & T.x >= 11.6 & T.x < 13.5 ~ "Q3",
+      age_group == "70+" & T.x >= 13.5 ~ "Q4",
+      TRUE ~ NA_character_
+    )
+  )
+
+
+
+table(surv$T_levels, surv$age_group)
+
+surv$T_levels <- factor(surv$T_levels, levels = c("Q1", "Q2", "Q3", "Q4"))
+surv$T_levels <- relevel(surv$T_levels, ref = "Q2")
+
+
+## creating new dataframes for each age group 
+
+surv_40_50 <- surv %>% filter(age_group == "40-50")
+surv_50_60 <- surv %>% filter(age_group == "50-60")
+surv_60_70 <- surv %>% filter(age_group == "60-70")
+surv_70_plus <- surv %>% filter(age_group == "70+")
+
+
+
+## run the survival analysis separately in each of these groups
+## with 3 levels
+
+## 40-50
+
+CADsurv <- Surv(surv_40_50$timetoEVENT, surv_40_50$CADBIN)
+
+
+km1 <- survfit(CADsurv~surv_40_50$T_levels, data = surv_40_50)
+
+
+summary(km1, censored = T)
+
+plot(km1, col = 1:4, lty = 1:4, xlab = "Time", ylab = "Survival Probability", main = "40-50")
+legend("bottomright", legend = levels(surv_40_50$T_levels), col = 1:4, lty = 1:4, title = "T_levels")
+
+
+
+
+# 50-60
+
+CADsurv <- Surv(surv_50_60$timetoEVENT, surv_50_60$CADBIN)
+
+
+km1 <- survfit(CADsurv~surv_50_60$T_levels, data = surv_50_60)
+
+
+summary(km1, censored = T)
+
+plot(km1, col = 1:4, lty = 1:4, xlab = "Time", ylab = "Survival Probability", main = "50-60")
+legend("bottomright", legend = levels(surv_50_60$T_levels), col = 1:4, lty = 1:4, title = "T_levels")
+
+
+# 60-70
+
+CADsurv <- Surv(surv_60_70$timetoEVENT, surv_60_70$CADBIN)
+
+
+km1 <- survfit(CADsurv~surv_60_70$T_levels, data = surv_60_70)
+
+
+summary(km1, censored = T)
+
+plot(km1, col = 1:4, lty = 1:4, xlab = "Time", ylab = "Survival Probability", main = "60-70")
+legend("bottomright", legend = levels(surv_60_70$T_levels), col = 1:4, lty = 1:4, title = "T_levels")
+
+
+# 70+
+
+CADsurv <- Surv(surv_70_plus$timetoEVENT, surv_70_plus$CADBIN)
+
+
+km1 <- survfit(CADsurv~surv_70_plus$T_levels, data = surv_70_plus)
+
+
+summary(km1, censored = T)
+
+plot(km1, col = 1:4, lty = 1:4, xlab = "Time", ylab = "Survival Probability")
+legend("bottomright", legend = levels(surv_70_plus$T_levels), col = 1:4, lty = 1:4, title = "T_levels")
+
+
+
+
+
+
+
+
+
+
+
+
 
 # need complete cases for testosterone deficiency 
 surv <- surv[complete.cases(surv$T.x), ]
