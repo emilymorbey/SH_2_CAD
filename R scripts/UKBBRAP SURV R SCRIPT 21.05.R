@@ -348,7 +348,6 @@ surv$testosterone_deficiency_broad <- ifelse(surv$T.x < 12, 1, 0)
 # group into 10 year age bins and look at the relationship 
 # we do need to keep men which have complete information on testosterone and CAD though 
 
-View(surv)
 
 surv$age_group <- cut(surv$AGERECRUIT,
                            breaks = c(-Inf, 50, 60, 70, Inf),
