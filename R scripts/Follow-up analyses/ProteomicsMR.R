@@ -11,9 +11,6 @@ files <- read.table("Males_OLINK.csv", header=TRUE)
 
 SNPs <- read.csv("Testosterone_SNPs_OL.csv", header = TRUE)
 
-
-
-
 # Initialize an empty dataframe to store the results
 results_df <- data.frame(File = character(), Estimate = numeric(), P_Value = numeric(), stringsAsFactors = FALSE)
 
