@@ -56,7 +56,6 @@ print(results_df)
 
 
 
-
 olinkid <- read.csv("OLINKIDS.csv", header = TRUE)
 olinkname <- read.csv("OLINKNAMES.csv", header = TRUE)
 
@@ -76,6 +75,4 @@ olink_sig_hits <- olink_hits %>% filter(P_Value < 0.00000005)
 
 
 write.table(olink_med_hits, "olinkmedhits.tsv", sep = "\t", row.names = TRUE)
-write.table(olink_sig_hits, "olinksighits.tsv", sep = "\t", row.names = TRUE) 
-
-
+write.table(olink_sig_hits, "olinksighits.tsv", sep = "\t", row.names = TRUE)        
