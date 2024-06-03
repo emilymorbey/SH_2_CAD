@@ -12,7 +12,7 @@ files <- read.table("Males_OLINK.csv", header=TRUE)
 SNPs <- read.csv("Testosterone_SNPs_OL.csv", header = TRUE)
 
 # Initialize an empty dataframe to store the results
-results_df <- data.frame(File = character(), Estimate = numeric(), P_Value = numeric(), stringsAsFactors = FALSE)
+results_df <- data.frame(File = character(), Estimate = numeric(), SE = numeric(), P_Value = numeric(), stringsAsFactors = FALSE)
 
 # Loop over each file in the list
 for(i in seq_along(files[,1])) {
@@ -44,10 +44,11 @@ for(i in seq_along(files[,1])) {
   
   # Extract the estimate and p-value
   estimate <- summary_model$coefficients[1, "Estimate"]
+  se <- summary_model$coefficients[1, "Std. Error"]
   p_value <- summary_model$coefficients[1, "Pr(>|t|)"]
   
   # Add the results to the dataframe
-  results_df <- rbind(results_df, data.frame(File = files[i, 1], Estimate = estimate, P_Value = p_value, stringsAsFactors = FALSE))
+  results_df <- rbind(results_df, data.frame(File = files[i, 1], Estimate = estimate, SE = se, P_Value = p_value, stringsAsFactors = FALSE))
 }
 
 # Print the results
