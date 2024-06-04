@@ -300,6 +300,20 @@ sum(any(phenotypes_all$CADBIN == 1 & is.na(phenotypes_all$earliest_cad_date_all)
 
 surv <- merge(phenotypes_all, surv, by = "IID", all.x = TRUE)
 
+## checking median testosterone 
+
+summary(surv$T.x) 
+summarise(surv, mean = mean(T.x, na.rm = TRUE))
+sum(surv$T.x < 0.68, na.rm = TRUE)
+sum(surv$T.x >= 0.68 & surv$T.x < 4.38, na.rm = TRUE)
+sum(surv$T.x >= 4.38 & surv$T.x < 8.08, na.rm = TRUE)
+sum(surv$T.x >= 8.08 & surv$T.x < 11.78, na.rm = TRUE)
+sum(surv$T.x >= 11.78 & surv$T.x < 15.48, na.rm = TRUE)
+sum(surv$T.x >= 15.48 & surv$T.x < 19.18, na.rm = TRUE)
+sum(surv$T.x >= 19.18 & surv$T.x < 22.88, na.rm = TRUE)
+sum(surv$T.x >= 22.88 & surv$T.x < 26.58, na.rm = TRUE)
+
+sum(nrow(surv))
 
 ########### CALCULATING SURVIVOR VARIABLES - DATES ETC. #########################
 
