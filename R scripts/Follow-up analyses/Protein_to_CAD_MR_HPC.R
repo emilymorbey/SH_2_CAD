@@ -1,3 +1,5 @@
+
+
 .libPaths("/rfs/project/rfs-mpB3sSsgAn4/Studies/People/Emily/R_lib/")
 sink("/rfs/project/rfs-mpB3sSsgAn4/Studies/People/Emily/Testosterone_CAD_MR/Proteomics/Proteomics.log")
 
@@ -35,31 +37,31 @@ for(i in seq_along(files[,1])) {
                             "Other_allele", "Weight", "SE_weight", 
                             "MarkerName", "ALLELE0", "ALLELE1",
                             "BETA", "SE")
-  
+
   allele_matching <- allele_matching[!allele_matching$ID == "rs56196860", ]
   
   # Harmonizing so the effect alleles for testosterone and protein are the same
   # Changing the betas here 
-  
-  
-  allele_matching$T_inc_allele <- if_else(allele_matching$Weight<0, allele_matching$Other_allele, 
-                                          allele_matching$Trait_raising)
-  
-  allele_matching$Weight <- as.numeric(allele_matching$Weight)
-  allele_matching$ABS_BETA_T <- abs(allele_matching$Weight)
-  
-  # harmonising so the effect alleles for CAD and SHBG are the same
-  # changing the betas here 
-  
-  allele_matching$BETA <- as.numeric(allele_matching$BETA)
-  
-  allele_matching$HARM_MALE_BETA_PROTEIN <- if_else(allele_matching$Trait_raising!=allele_matching$ALLELE1,
-                                                    allele_matching$BETA*-1, allele_matching$BETA)
+
+
+allele_matching$T_inc_allele <- if_else(allele_matching$Weight<0, allele_matching$Other_allele, 
+                                           allele_matching$Trait_raising)
+
+allele_matching$Weight <- as.numeric(allele_matching$Weight)
+allele_matching$ABS_BETA_T <- abs(allele_matching$Weight)
+
+# harmonising so the effect alleles for CAD and SHBG are the same
+# changing the betas here 
+
+allele_matching$BETA <- as.numeric(allele_matching$BETA)
+
+allele_matching$HARM_MALE_BETA_PROTEIN <- if_else(allele_matching$T_inc_allele!=allele_matching$ALLELE1,
+                                              allele_matching$BETA*-1, allele_matching$BETA)
   
   # Running the model 
   allele_matching$SE <- as.numeric(allele_matching$SE)
   IVW_weights <- allele_matching$SE^-2 
-  inverse_weighted_LR <- lm(allele_matching$HARM_MALE_BETA_PROTEIN ~ allele_matching$Weight - 1, weights = IVW_weights) 
+  inverse_weighted_LR <- lm(allele_matching$HARM_MALE_BETA_PROTEIN ~ allele_matching$ABS_BETA_T - 1, weights = IVW_weights) 
   
   # Get the summary of the model
   summary_model <- summary(inverse_weighted_LR)
@@ -71,7 +73,7 @@ for(i in seq_along(files[,1])) {
   
   # Add the results to the dataframe
   results_df <- rbind(results_df, data.frame(File = files[i, 1], 
-                                             Estimate = estimate, SE = se, P_Value = p_value, stringsAsFactors = FALSE))
+  Estimate = estimate, SE = se, P_Value = p_value, stringsAsFactors = FALSE))
 }
 
 # Print the results
@@ -88,4 +90,4 @@ olink_hits <- na.omit(olink_hits[!is.na(olink_hits$File), ])
 olink_bonferroni_sig_hits <- olink_hits %>% filter(P_Value < 0.0000346)
 
 
-write.table(olink_bonferroni_sig_hits, file="/rfs/project/rfs-mpB3sSsgAn4/Studies/People/Emily/Testosterone_CAD_MR/Proteomics/OL_Biobank/Males/Male_OL_Biobank_T_MR_4.txt", sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)
+write.table(olink_bonferroni_sig_hits, file="/rfs/project/rfs-mpB3sSsgAn4/Studies/People/Emily/Testosterone_CAD_MR/Proteomics/OL_Biobank/Males/Male_OL_Biobank_T_MR_9.txt", sep="\t", quote=FALSE, row.names=FALSE, col.names=TRUE)

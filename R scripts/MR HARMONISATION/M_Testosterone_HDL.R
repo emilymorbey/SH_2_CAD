@@ -37,7 +37,7 @@ M_T_proxies_output <- M_T_proxies_output[!M_T_proxies_output$Target == "rs561968
 
 allele_matching <- allele_matching[1:(nrow(allele_matching) - 1), ]
 M_T_proxies_output <- M_T_proxies_output[1:(nrow(M_T_proxies_output) -1), ]
-# identify trait increasing allele for SHBG
+# identify trait increasing allele for T
 
 allele_matching$T_inc_allele <- if_else(allele_matching$BETA_T<0, allele_matching$reference_allele_T, 
                                         allele_matching$other_allele_T)
