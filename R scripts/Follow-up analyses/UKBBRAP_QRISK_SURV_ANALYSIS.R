@@ -1,4 +1,14 @@
 
+install.packages("data.table")
+install.packages("dplyr")
+install.packages("ggplot2")
+install.packages("ggforce")
+install.packages("tableone")
+install.packages("survminer")
+install.packages("MatchIt")
+install.packages("devtools")
+install.packages("cli")
+
 
 library(tidyverse)
 library(dplyr)
@@ -8,6 +18,7 @@ library(stringr)
 library(cli)
 library(data.table)
 
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
 
 
 ################################################################################
@@ -18,7 +29,7 @@ library(data.table)
 # reading in the file which has all the covariates that we want to control for 
 # including the survivor variables like age of recruitment etc. 
 
-surv <- read.csv("data_participant_surv_2.csv")
+surv <- read.csv("TestosteroneCAD/data_participant_surv_2.csv")
 
 colnames(surv) <- c("IID", "T", "CAD", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", "LTF", "DATEASSESSMENT")
 
@@ -38,8 +49,8 @@ colnames(surv) <- c("IID", "T", "CAD", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", 
 ## these are described by their ICD_10 code
 
 
-icd10_1 <- read.csv("male_icd10_1.csv")
-icd10_2 <- read.csv("male_icd10_2.csv")
+icd10_1 <- read.csv("TestosteroneCAD/male_icd10_1.csv")
+icd10_2 <- read.csv("TestosteroneCAD/male_icd10_2.csv")
 
 
 # assign the patterns of characters that we want to search for in the 
@@ -347,7 +358,7 @@ surv <- surv[complete.cases(surv$T.x), ]
 # writing this surv file out so it can be used in the RAP to run the actual
 # models
 
-write.csv(surv, "CAD_SURV", row.names = TRUE)
+write.csv(surv, "CAD_SURV.csv", row.names = TRUE)
 
 # NEED TO COME BACK TO THIS AND CHECK IF WE CAN INCORPORATE THE ICD-9 CODES
 # BUT I DON'T THINK IT WILL MAKE MUCH DIFFERENCE BECAUSE THE EARLIEST DATE 
@@ -838,6 +849,4 @@ ggplot(qrisksurv, aes(x = T, y = BMI, color = age_group)) +
        y = "BMI",
        color = "Age Group") +
   theme_minimal()
-
-
 
