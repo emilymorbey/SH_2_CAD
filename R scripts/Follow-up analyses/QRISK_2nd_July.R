@@ -1,0 +1,876 @@
+library(tidyverse)
+library(dplyr)
+library(survival)
+library(lubridate)
+library(stringr)
+library(cli)
+library(data.table)
+library(ggplot2)
+
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
+
+
+################################################################################
+##################### ADDING IN COVARIATES #####################################
+################################################################################
+
+
+# reading in the file which has all the covariates that we want to control for 
+# including the survivor variables like age of recruitment etc. 
+
+surv <- read.csv("TestosteroneCAD/data_participant_surv_2.csv")
+
+colnames(surv) <- c("IID", "T", "CAD", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", "LTF", "DATEASSESSMENT")
+
+surv <- surv %>% select(-CAD)
+
+################################################################################
+######################### DATING AND PHENOTYPING CAD PHENOTYPES  ###############
+################################################################################
+
+## read in data on ICD_10 codes 
+## icd10_1 is the participants and the dates of their diagnosis of specific 
+## types of conditions 
+## this dates them by category of condition rather than the very specific 
+## condition types that are listed in the ICD_10 codes themselves 
+## icd10_2 is a row per diagnosis of each individual 
+## so each individual may have as many rows as they have conditions
+## these are described by their ICD_10 code
+
+
+icd10_1 <- read.csv("TestosteroneCAD/male_icd10_1.csv")
+icd10_2 <- read.csv("TestosteroneCAD/male_icd10_2.csv")
+
+
+# assign the patterns of characters that we want to search for in the 
+# ICD_10 codes 
+# all of the cardiovascular conditions begin with an I and the 
+# subsequent letters describe the more specific subtypes 
+
+
+patterns <- c("I21", "I210", "I211", "I212", "I213", "I214", "I219", "I21X",
+              "I22", "I220", "I221", "I228", "I229", "I23", "I23.1", "I23.2",
+              "I23.3", "I23.4", "I23.5", "I23.6", "I238", "I24", "I240",
+              "I241", "I248", "I249", "I252")
+
+
+# now we are filtering the long list of conditions which has a row 
+# for each individual and just keeping the ones with the cardiovascular 
+# ICD_10 patterns 
+
+
+relevant_icd10 <- icd10_2 %>%
+  filter(grepl(paste(patterns, collapse = "|"), diag_icd10))
+
+
+# then merge with the file which has all the dates to make it possible 
+# to date the cardiovascular conditions 
+# the different columns from the ICD_10_1 file represent 
+# the different types of conditions 
+# within them is the date which the person was diagnosed with the condition 
+
+
+icd10_dates <- merge(icd10_1, relevant_icd10, by = "eid")
+icd10_dates$X131298.0.0 <- as.Date(icd10_dates$X131298.0.0)
+icd10_dates$X131300.0.0 <- as.Date(icd10_dates$X131300.0.0)
+icd10_dates$X131302.0.0 <- as.Date(icd10_dates$X131302.0.0)
+icd10_dates$X131304.0.0 <- as.Date(icd10_dates$X131304.0.0)
+icd10_dates$X131306.0.0 <- as.Date(icd10_dates$X131306.0.0)
+
+
+# now it is possible to find the minimum value of the dates of the 
+# different diagnoses of types of CAD conditions 
+# so we can use the pmin function to select the earliest date
+# this date is required as we want the earliest diagnosis of CAD 
+# to be used as the date of the event in the survival analysis 
+
+
+icd10_dates$earliest_cad_date <- pmin(icd10_dates$X131298.0.0, icd10_dates$X131300.0.0,
+                                      icd10_dates$X131302.0.0, icd10_dates$X131304.0.0,
+                                      icd10_dates$X131306.0.0, na.rm = TRUE)
+
+
+# checking if there are any NAs to see if anything has gone wrong in 
+# finding the minimum value 
+# now for every CAD condition recorded there should be the date associated with 
+# the earliest diagnosis 
+
+sum(is.na(icd10_dates$earliest_cad_date))
+
+# changing the name of the ID column so it is possible to merge with the next 
+# table
+
+names(icd10_dates)[names(icd10_dates) == "eid"] <- "IID"
+
+
+
+
+
+
+
+################################################################################
+############# phenotyping CAD cases ############################################
+################################################################################
+
+
+## phenotypes 1 contains the list of participants and their icd10 and icd9
+## diagnoses 
+## there are very few ICD9 diagnoses because they are an older form
+## i believe ICD9 codes were just used in scotland
+## phenotypes 2 has testosterone levels 
+## also has all of the recorded operations for these individuals 
+## and any self reported illness 
+
+phenotypes <- read.csv("TestosteroneCAD/new_cad_1.csv")
+phenotypes2 <- read.csv("TestosteroneCAD/new_cad_2.csv")
+
+
+# here we are going to collapse the icd10 data so that there is 
+# not one row per condition per individual but so they are all 
+# in one row for that individual
+
+phenotypes_collapsed <- phenotypes %>%
+  group_by(eid) %>%
+  summarize(
+    diag_icd10 = paste(diag_icd10, collapse = ", "),
+    diag_icd9 = paste(diag_icd9, collapse = "")
+  ) %>%
+  ungroup()
+
+
+# then we are going to pull out any CAD related conditions based on their 
+# icd10 code and create a new column called CAD_ICD10 which places a 1
+# if any CAD conditions were present in their ICD10 list 
+# and a 0 if there were not any 
+
+phenotypes_collapsed <- phenotypes_collapsed %>%
+  mutate(CAD_ICD10 = if_else(grepl("I21|I210|I211|I212|I213|
+                            I214|I219|I21X|I22|I220|I221|I228|I229|
+                            I23|I23.1|I23.2|I23.3|I23.4|I23.5|
+                            I23.6|I238|I24|I240|I241|I248|I249|
+                            I252", phenotypes_collapsed$diag_icd10), 1, 0))
+
+
+# now doing the same for ICD9 codes 
+# the ones listed in this code are the way CAD is recorded in ICD9
+
+
+phenotypes_collapsed <- phenotypes_collapsed %>%
+  mutate("CAD_ICD9" = if_else(grepl("410|411|
+                                    412|413|414", phenotypes_collapsed$diag_icd9), 1, 0))
+
+
+## now we have coded whether or not individuals have or do not have CAD 
+## as defined by a long list of ICD10 and ICD9 codes 
+## now we are going to merge this with the file which has data on operations 
+## and self reported CAD 
+
+
+phenotypes_all <- merge(phenotypes_collapsed, phenotypes2, by = "eid")
+
+## and rename the columns so we can understand them 
+
+names(phenotypes_all)[names(phenotypes_all) == "X30850.0.0"] <- "T"
+names(phenotypes_all)[names(phenotypes_all) == "X41272.0.0"] <- "OPS"
+names(phenotypes_all)[names(phenotypes_all) == "X20002.0.0"] <- "Self-report"
+names(phenotypes_all)[names(phenotypes_all) == "eid"] <- "IID"
+
+
+
+## adding the ICD_10 dates file onto the phenotypes_all file 
+
+phenotypes_all <- merge(phenotypes_all, icd10_dates, by = "IID", all.x =TRUE)
+
+
+## removing all the columns for the different types of CAD 
+## as we do not need these anymore
+
+
+phenotypes_all <- subset(phenotypes_all, select = -c(X131306.0.0, X131304.0.0, 
+                                                     X131302.0.0, X131300.0.0, 
+                                                     X131298.0.0))
+
+
+
+####### LOCATING AND DATING OPERATIONS #########################################
+
+
+## now we are going to pull out all of the operations which are associated 
+## with CAD - these fall under this long list of codes 
+## if people have had these operations, they get a 1, if not they get a 0
+
+
+phenotypes_all <- phenotypes_all %>%
+  mutate("CAD_OP" = if_else(grepl("K40|K401|K402|K403|K404|K408|K409|K41|K411|
+  K412|K413|K414|K418|K419|K42|K421|K422|K423|K424|K428|K429|K43|K431|K432|K433|
+  K434|K438|K439|K44|K441|K442|K448|K449|K45|K451|K452|K453|K454|K455|K456|K458|
+  K459|K46|K461|K462|K463|K464|K465|K468|K469|K49|K491|K492|K49.3|K494|K498|K499|
+  K50|K501|K502|K50.3|K504|K508|K509|K75|K75.1|K75.2|K75.3|K75.4|K75.8|K75.9", phenotypes_all$OPS), 1, 0))
+
+
+## now we are going to find out what the dates of these operations were
+## this is using a similar method as we used for the ICD10 data
+
+
+## this file has data on the operations of each individual and when these operations
+## happened
+
+op_dates <- read.csv("TestosteroneCAD/male_ops_full.csv")
+
+
+patterns <- c("K40", "K401", "K402", "K403", "K404", "K408", "K409", "K41", "K411",
+              "K412", "K413", "K414", "K418", "K419", "K42", "K421", "K422", "K423", 
+              "K424", "K428", "K429", "K43", "K431", "K432", "K433", "K434", "K438", 
+              "K439", "K44", "K441", "K442", "K448", "K449", "K45", "K451", "K452", 
+              "K453", "K454", "K455", "K456", "K458", "K459", "K46", "K461", "K462", 
+              "K463", "K464", "K465", "K468", "K469", "K49", "K491", "K492", "K493", 
+              "K494", "K498", "K499", "K50", "K501", "K502", "K50.3", "K504", "K508", 
+              "K509", "K75", "K75.1", "K75.2", "K75.4", "K75.8", "K75.9")
+
+
+## now filtering the operations data to keep only the operations associated 
+## with CAD
+
+
+relevant_ops <- op_dates %>%
+  filter(grepl(paste(patterns, collapse = "|"), oper4))
+
+
+## renaming the ID file so we can merge with the phenotypes file
+
+names(relevant_ops)[names(relevant_ops) == "eid"] <- "IID"
+
+## merging the operations dates to the phenotypes_all file
+
+phenotypes_all <- merge(phenotypes_all, relevant_ops, by = "IID", all.x = TRUE)
+
+## removing redundant columns 
+
+phenotypes_all <- subset(phenotypes_all, select = -c(dnx_hesin_oper_id))
+
+
+
+
+
+########### GATHERING ALL CASES OF CAD INTO A SINGLE BINARY PHENOTYPE ##########
+
+
+## setting all the CAD binary outcomes as numerics 
+
+phenotypes_all$CAD_ICD10 <- as.numeric(phenotypes_all$CAD_ICD10)
+phenotypes_all$CAD_ICD9 <- as.numeric(phenotypes_all$CAD_ICD9)
+phenotypes_all$CAD_OP <- as.numeric(phenotypes_all$CAD_OP)
+
+
+## telling R that if there is a 1 in any of these 3 columns to put a
+## 1 in our new CADBIN column 
+## this CADBIN column has a 1 if CAD has been identified by either ICD10, ICD9
+## or operations codes 
+
+
+phenotypes_all$CADBIN <- as.numeric(rowSums(phenotypes_all[, c("CAD_ICD10", "CAD_OP", "CAD_ICD9")]) > 0)
+
+
+
+
+## now we are merging the earliest CAD date column from the ICD_10 data 
+## and the operation date for those who had the operation, and selecting the 
+## first instance
+
+phenotypes_all$earliest_cad_date_all <- pmin(phenotypes_all$earliest_cad_date,
+                                             phenotypes_all$opdate, na.rm = TRUE)
+
+
+
+## then checking if there is anyone that does not have cad and has a date suggesting 
+## they have cad 
+
+sum(any(phenotypes_all$CADBIN == 0 & !is.na(phenotypes_all$earliest_cad_date_all)))
+
+## now checking if there is anyone that does have cad but does not have a date 
+
+sum(any(phenotypes_all$CADBIN == 1 & is.na(phenotypes_all$earliest_cad_date_all)))
+
+phenotypes_condensed <- phenotypes_all %>% select("IID", "T", "CADBIN", "earliest_cad_date_all")
+
+
+## now merging our CAD survivorship info with the surv file which we 
+## loaded in first and contains all the relevant covariates 
+
+
+surv <- merge(phenotypes_condensed, surv, by = "IID", all.x = TRUE)
+
+surv <- surv %>% select(-"T.y")
+surv <- surv %>% rename("T" = "T.x")
+
+
+########### CALCULATING SURVIVOR VARIABLES - DATES ETC. #########################
+
+# if they have a date in their lost to follow up column, place a 1
+# otherwise, leave as 0 - now we have a binary column which says whether 
+# someone was lost to follow up or not
+
+surv$LTFBIN <- ifelse(surv$LTF == "" ,0,1)
+
+# adding censoring date as the current date 
+surv$censdate <- Sys.Date()
+surv$censdate[surv$LTFBIN == 1] <- surv$LTF[surv$LTFBIN == 1]
+
+# Extract month and day of the earliest recorded CAD instance 
+surv$cadmonth <- month(surv$earliest_cad_date_all)
+surv$cadday <- day(surv$earliest_cad_date_all)
+surv$cadyear <- year(surv$earliest_cad_date_all)
+surv$censyear <- year(surv$censdate)
+
+# changing months to numbers for month of birth
+surv$monthbirthnum <- as.integer(factor(surv$MONTHBIRTH, levels = month.name))
+
+# creating a censoring variable = anyone who does not come up as a CAD case
+surv$censored <- ifelse(surv$CADBIN == 0, 1, 0)
+
+# creating a year of recruitment variable - this will be inaccurate 
+surv$year_of_recruitment <- surv$YEARBIRTH + surv$AGERECRUIT
+
+# creating a time to event variable
+surv$timetoCAD <- surv$cadyear-surv$YEARBIRTH
+
+# creating a time to censoring variable 
+surv$timetoCENSOR <- ifelse(surv$censored == 1, surv$censyear - surv$YEARBIRTH, NA)
+
+# creating a general time to event variable 
+surv$timetoEVENT <- ifelse(is.na(surv$timetoCENSOR), surv$timetoCAD, surv$timetoCENSOR)
+
+# create a variable for testosterone deficiency 
+# surv$testosterone_deficiency <- ifelse(surv$T.x < 12, 1, 0)
+
+# need complete cases for testosterone deficiency 
+# surv <- surv[complete.cases(surv$T.x), ]
+
+# select relevant columns 
+
+surv_key_variables <- surv %>% select("IID", "T", "CADBIN",
+                                      "timetoEVENT")
+
+
+# writing this surv file out so it can be used in the RAP to run the actual
+# models
+
+write.csv(surv_key_variables, "CAD_SURV.csv", row.names = TRUE)
+
+
+
+
+#################################################################################
+####################### COPY THIS SECTION INTO THE RAP ##########################
+########################################################################################
+
+library(tidyverse)
+library(survival)
+
+# reading in the surv file that we have just written out 
+# and removing some redundant columns 
+
+surv <- read.csv("CAD_SURV.csv")
+
+
+
+################################################################################
+################# ADDING IN COVARIATES #########################################
+################################################################################
+
+
+
+###### ALL COVARIATES READ IN  ################################################
+
+medications <- read.csv("TestosteroneCAD/medications_participant.csv")
+sociodemographics <- read.csv("TestosteroneCAD/sociodemographics_participant.csv")
+other_illness <- read.csv("TestosteroneCAD/other_diseases_participant.csv")
+
+
+
+
+###### DIABETES ################################################################
+
+diabetes <- read.csv("TestosteroneCAD/diabetes3_participant.csv")
+
+
+colnames(diabetes) <- c("IID", "SELFREPORT", "MEDICATION", "DOCTOR", "HBA1C", "ICD10", "ICD9")
+
+
+#### type 1
+
+diabetes <- diabetes %>%
+  mutate(TYPE1DIAB = if_else(grepl("E10|O240", diabetes$ICD10) | 
+                               grepl("1222", diabetes$SELFREPORT)|
+                               grepl("25001|25011|25021|25031|25041|25051|25061|25071|25081|25091|25003|25013|25023|25033|25043|25053|25063|25073|25083|25093", diabetes$ICD9), 1, 0))
+
+table(diabetes$TYPE1DIAB)
+
+
+#### type 2
+
+diabetes <- diabetes %>%
+  mutate(TYPE2DIAB = if_else(
+    grepl("E11|O241", ICD10) | 
+      grepl("1223|1220", SELFREPORT) |
+      grepl("25000|25010|25020|25030|25040|25050|25060|25070|25080|25090|25002|25012|25022|25032|25042|25052|25062|25072|25082|25092", ICD9) |
+      grepl("1140868902|1140874646|1140874674|1140874718|1140874744|1140883066|1140884600|1141152590|1141157284|1141168660|1141171646|1141173882|1141189090", MEDICATION) |
+      replace_na(HBA1C > 48, FALSE), 
+    1, 0
+  ))
+
+table(diabetes$TYPE2DIAB)
+
+
+
+###### OTHER ILLNESS ###########################################################
+
+
+colnames(other_illness) <- c("IID", "ICD10", "ICD9", "SELFREPORT", "MEDICATION")
+
+
+###### arthritis
+
+other_illness <- other_illness %>%
+  mutate(ARTHRITIS = if_else(grepl("M05|M06", other_illness$ICD10) | 
+                               grepl("1464", other_illness$SELFREPORT)|
+                               grepl("714", other_illness$ICD9), 1, 0))
+
+
+##### afib 
+
+other_illness <- other_illness %>%
+  mutate(AFIB = if_else(grepl("I48", other_illness$ICD10) | 
+                               grepl("1471|1483", other_illness$SELFREPORT)|
+                               grepl("4273|4720", other_illness$ICD9), 1, 0))
+
+
+##### chronic kidney disease
+
+other_illness <- other_illness %>%
+  mutate(KIDNEY_DISEASE = if_else(grepl("N183|N184|N185", other_illness$ICD10) | 
+                               grepl("1192|1519|1609", other_illness$SELFREPORT)|
+                               grepl("5853|5855|5810|5820|5900|V420|V451", other_illness$ICD9), 1, 0))
+
+
+
+
+##### migraine
+
+other_illness <- other_illness %>%
+  mutate(MIGRAINE = if_else(grepl("G43|G440|N943", other_illness$ICD10) | 
+                               grepl("1265", other_illness$SELFREPORT)|
+                               grepl("346", other_illness$ICD9), 1, 0))
+
+
+##### SLE 
+
+other_illness <- other_illness %>%
+  mutate(SLE = if_else(grepl("M32", other_illness$ICD10) | 
+                              grepl("1381", other_illness$SELFREPORT)|
+                              grepl("7100", other_illness$ICD9), 1, 0))
+
+
+
+##### MENTAL ILLNESS
+
+other_illness <- other_illness %>%
+  mutate(MENTAL_ILLNESS = if_else(grepl("F03|F068|F09|F20|F22|F23|F259|F28|F29|F31|F39|F53|F333", other_illness$ICD10) | 
+                              grepl("1289|1291", other_illness$SELFREPORT)|
+                              grepl("295|298|296", other_illness$ICD9), 1, 0))
+
+
+
+##### ED
+
+other_illness <- other_illness %>%
+  mutate(ED = if_else(grepl("N484", other_illness$ICD10) | 
+                              grepl("1518", other_illness$SELFREPORT)|
+                              grepl("60784", other_illness$ICD9)|
+                        grepl("1141168936|1141168948|1141168944|1141168946|1140869100|1140883010", other_illness$MEDICATION), 1, 0))
+
+
+
+
+##################### MEDICATIONS #############################################
+
+medications <- read.csv("TestosteroneCAD/medications_participant.csv")
+
+colnames(medications) <- c("IID", "MEDICATION", "BPMEDS")
+
+
+medications <- medications %>%
+  mutate(HYPERTENSION = if_else(grepl("1140860192|1140860292|1140860696|
+                                      1140860728|1140860750|1140860806|1140860882|
+                                      1140860904|1140861088|1140861190|1140861276|
+                                      1140866072|1140866078|1140866090|1140866102|
+                                      1140866108|1140866122|1140866138|1140866156|
+                                      1140866162|1140866724|1140866738|1140868618|
+                                      1140872568|1140874706|1140874744|1140875808|
+                                      1140879758|1140879760|1140879762|1140879802|
+                                      1140879806|1140879810|1140879818|1140879822|
+                                      1140879826|1140879830|1140879834|1140879842|
+                                      1140879866|1140884298|1140888552|1140888556|
+                                      1140888560|1140888646|1140909706|1140910442|
+                                      1140910614|1140916356|1140923272|1140923336|
+                                      1140923404|1140923712|1140926778|1140928226|
+                                      1141145660|1141146126|1141152998|1141153026|
+                                      1141164276|1141165470|1141166006|1141169516|
+                                      1141171336|1141180592|1141180772|1141180778|
+                                      1141184722|1141193282|1141194794|1141194810", medications$MEDICATION) | 
+                                  grepl("2", medications$BPMEDS), 1, 0))
+
+
+
+##### corticosteroids 
+
+
+medications <- medications %>%
+  mutate(CORTICOSTEROIDS = if_else(grepl("1140874790|1140874816|
+1140874896.00|1140874930|1140874976|1141145782|1141173346", medications$MEDICATION) , 1, 0))
+
+
+table(medications$CORTICOSTEROIDS)
+
+
+
+##### antipsychotics 
+
+
+medications <- medications %>%
+  mutate(ANTIPSYCHOTICS = if_else(grepl("1140867420|1140867444|1140927956|
+                                        1140928916|1141152848|1141153490|
+                                        1141169714|1141195974", medications$MEDICATION) , 1, 0))
+
+
+table(medications$ANTIPSYCHOTICS)
+
+
+
+
+
+
+
+# SOCIODEMOGRAPHIC VARIABLES 
+
+sociodemographics <- read.csv("TestosteroneCAD/sociodemographics_participant.csv")
+
+
+### smoking
+
+
+# smoking - this one is more tricky 
+
+sociodemographics$exsmoker <- ifelse(sociodemographics$Ever.smoked...Instance.0 == "1" & sociodemographics$Current.tobacco.smoking...Instance.0=="0" ,"2",NA)
+sociodemographics$nonsmoker <- ifelse(sociodemographics$Ever.smoked...Instance.0 == "0" ,"1",NA)
+sociodemographics$NUM_CIGS_DAILY <- as.numeric(sociodemographics$Number.of.cigarettes.currently.smoked.daily..current.cigarette.smokers....Instance.0)
+sociodemographics$SmokingCategory <- ifelse(sociodemographics$NUM_CIGS_DAILY < 10 & sociodemographics$NUM_CIGS_DAILY > 0, "3",
+                                    ifelse(sociodemographics$NUM_CIGS_DAILY >= 10 & sociodemographics$NUM_CIGS_DAILY < 20, "4", 
+                                           ifelse(sociodemographics$NUM_CIGS_DAILY >= 20, "5", NA)))
+
+
+
+# Remove NA values and replace with empty strings
+sociodemographics$exsmoker[is.na(sociodemographics$exsmoker)] <- ""
+sociodemographics$nonsmoker[is.na(sociodemographics$nonsmoker)] <- ""
+sociodemographics$SmokingCategory[is.na(sociodemographics$SmokingCategory)] <- ""
+
+# Combine columns into UKBBSMOKING with no white space
+sociodemographics$UKBBSMOKING <- paste0(sociodemographics$exsmoker, sociodemographics$nonsmoker, sociodemographics$SmokingCategory)
+
+
+sociodemographics$UKBBSMOKING <- as.factor(sociodemographics$UKBBSMOKING)
+
+sociodemographics %>%
+  mutate(UKBBSMOKING = factor(UKBBSMOKING,
+                              levels = c("","1","2","3","4","5")))
+
+sociodemographics <- sociodemographics %>% select(-"nonsmoker", -"SmokingCategory", -"NUM_CIGS_DAILY")
+
+
+
+
+
+colnames(sociodemographics) <- c("IID", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", "DEPRIVATION", "LOST_TO_FOLLOW_UP", "ETHNICITY", 
+                                 "BMI", "EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING", "CIGSDAILY", "SBP1", "DATEASSESSMENT", 
+                                 "SBP2", "CHOLESTEROL", "HDL", "ILLFATH", "ILLMOTH", "ILLSIBS", "EXSMOKER", "UKBBSMOKING")
+
+
+
+
+
+##### BLOOD PRESSURE 
+
+invalid_columns <- which(names(sociodemographics) == "" | is.na(names(sociodemographics)))
+print(invalid_columns)
+
+names(sociodemographics)[invalid_columns] <- paste0("InvalidName", seq_along(invalid_columns))
+
+sociodemographics <- sociodemographics %>%
+  mutate(SBP = (SBP1 + SBP2) / 2)
+
+
+sociodemographics <- sociodemographics %>%
+  rowwise() %>%
+  mutate(SBP_SD = sd(c(SBP1, SBP2))) %>%
+  ungroup()
+
+
+
+
+
+
+
+##### CHOLESTEROL HDL RATIO
+
+
+sociodemographics <- sociodemographics %>%
+  mutate(CHOLESTEROLTOHDL = CHOLESTEROL / HDL)
+
+
+
+
+
+
+##### ethnicity 
+
+
+sociodemographics <- sociodemographics %>%
+  mutate(ETHNICITY_CATEGORY = case_when(
+    ETHNICITY %in% c(1, 1001, 1002, 1003, -1, -3) ~ 1,  # White or not stated
+    ETHNICITY == 3001 ~ 2,  # Indian
+    ETHNICITY == 3002 ~ 3,  # Pakistani
+    ETHNICITY == 3003 ~ 4,  # Bangladeshi
+    ETHNICITY == 3004 ~ 5,  # Other Asian
+    ETHNICITY == 4001 ~ 6,  # Black Caribbean
+    ETHNICITY == 4002 ~ 7,  # Black African
+    ETHNICITY == 5 ~ 8,  # Chinese
+    ETHNICITY == 6 ~ 9,  # Other ethnic group
+    TRUE ~ NA_real_  # Default case, if none of the conditions match
+  ))
+
+
+
+sociodemographics <- sociodemographics %>%
+  mutate(ETHNICITY_CATEGORY = factor(ETHNICITY_CATEGORY, levels = 1:9, labels = c(
+    "White or not stated",
+    "Indian",
+    "Pakistani",
+    "Bangladeshi",
+    "Other Asian",
+    "Black Caribbean",
+    "Black African",
+    "Chinese",
+    "Other ethnic group"
+  )))
+
+
+
+
+##### ill family member
+
+sociodemographics <- sociodemographics %>%
+  mutate(FAMHISTORY = if_else(
+    grepl("\\b1\\b", ILLFATH) | grepl("\\b1\\b", ILLMOTH) | grepl("\\b1\\b", ILLSIBS),
+    1, 0
+  ))
+
+
+
+
+
+
+
+
+#### selecting the important variables before merging 
+
+medications <- medications %>% select("IID", "HYPERTENSION", "CORTICOSTEROIDS", "ANTIPSYCHOTICS")
+diabetes <- diabetes %>% select("IID", "TYPE1DIAB", "TYPE2DIAB")
+other_illness <- other_illness %>% select(-c("MEDICATION", "SELFREPORT"))
+
+
+
+
+
+###### MERGING ALL OF THESE TABLES 
+
+COVARIATES <- merge(diabetes, medications, by = "IID")
+COVARIATES <- merge(COVARIATES, other_illness, by = "IID")
+COVARIATES <- merge(COVARIATES, sociodemographics, by = "IID")
+
+
+
+
+
+
+
+
+
+###### merging with the survival data
+
+COMPLETE_DATA <- merge(surv, COVARIATES, by = "IID")
+
+
+sum(complete.cases(COMPLETE_DATA))
+
+
+
+write.csv(COMPLETE_DATA, file = "COMPLETE_SURV_DATA.csv", row.names = TRUE)
+
+
+
+
+
+
+
+
+####### DONE IN THE RAP #################################
+
+install.packages("tidyverse")
+install.packages("survival")
+install.packages("ggplot2")
+
+
+library(tidyverse)
+library(survival)
+library(ggplot2)
+library(survminer)
+
+qrisksurv <- read.csv("COMPLETE_SURV_DATA.csv")
+
+
+# creating quartiles of the testosterone distribution
+
+quartiles <- quantile(qrisksurv$T, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+qrisksurv$testosterone_quartile <- cut(qrisksurv$T, breaks = quartiles,
+                                       labels = c("lower", "lower middle", "upper middle", "upper"),
+                                       include.lowest = TRUE)
+
+
+
+qrisksurv <- qrisksurv %>% select(-c("CIGSDAILY"))
+qrisksurv <- qrisksurv %>% select(-c("EXSMOKER"))
+qrisksurv <- qrisksurv %>% select(-c("ICD10", "ICD9"))
+qrisksurv <- qrisksurv %>% select(-c("X.1"))
+qrisksurv <- qrisksurv %>% select(-c("LOST_TO_FOLLOW_UP"))
+qrisksurv <- qrisksurv %>% select(-c("EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING"))
+qrisksurv <- qrisksurv %>% select(-c("X"))
+qrisksurv <- qrisksurv %>% select(-c("ILLFATH", "ILLMOTH", "ILLSIBS"))
+qrisksurv <- qrisksurv %>% select(-c("SBP1", "SBP2"))
+
+
+
+complete_data <- qrisksurv[complete.cases(qrisksurv), ]
+
+
+# age categories 
+
+complete_data$age_group <- cut(complete_data$AGERECRUIT,
+                               breaks = c(-Inf, 50, 60, 70, Inf),
+                               labels = c("40-50", "50-60", "60-70", "70+"),
+                               right = FALSE)
+
+
+
+# deficient, sufficient, and high groups 
+
+# Define cutoff points and labels
+cut_points <- c(-Inf, 12, 20, 35, Inf)
+labels <- c("deficient", "sufficient", "high", "very high")
+
+# Create categorical variable for testosterone categories
+complete_data$testosterone_category <- cut(complete_data$T, breaks = cut_points, labels = labels, include.lowest = TRUE)
+
+complete_data$testosterone_category <- relevel(complete_data$testosterone_category, ref = "sufficient")
+
+
+
+
+# SURVIVAL ANALYSIS 
+
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Kaplan-Meier survival curves
+km_fit <- survfit(CADsurv ~ testosterone_category, data = complete_data)
+
+
+View(km)
+
+
+
+cox_model <- coxph(CADsurv~testosterone_category, data = complete_data)
+summary(cox_model)
+
+
+
+
+
+
+
+df_40_50 <- filter(complete_data, age_group == "40-50")
+df_50_60 <- filter(complete_data, age_group == "50-60")
+df_60_70 <- filter(complete_data, age_group == "60-70")
+df_70_plus <- filter(complete_data, age_group == "70+")
+
+
+
+CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
+cox_model1 <- coxph(CADsurv~testosterone_category, data = df_40_50)
+summary(cox_model1)
+
+CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
+cox_model2 <- coxph(CADsurv~testosterone_category, data = df_50_60)
+summary(cox_model2)
+
+CADsurv <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
+cox_mode3 <- coxph(CADsurv~testosterone_category, data = df_60_70)
+summary(cox_model3)
+
+CADsurv <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
+cox_model4 <- coxph(CADsurv~testosterone_category, data = df_70_plus)
+summary(cox_model4)
+
+
+
+
+
+results <- read.csv("TestosteroneCAD/hazard_ratios.csv")
+print(results)
+
+
+
+
+
+results$age.group <- factor(results$age.group, levels = c("overall", "40-50", "50-60", "60-70"))
+
+
+
+
+library(ggplot2)
+
+results$t.category <- factor(results$t.category, levels = c("deficient", "sufficient", "high", "very high"), ordered = TRUE)
+
+# Convert age.group to factor to ensure correct order in the plot
+results$age.group <- factor(results$age.group, levels = c("overall", "40-50", "50-60", "60-70"))
+
+# Plot using ggplot2
+p <- ggplot(results, aes(x = age.group, y = hr)) +
+  geom_point(aes(color = t.category), size = 3, position = position_dodge(width = 0.5)) +
+  geom_errorbar(aes(ymin = lci, ymax = uci, color = t.category), width = 0.2, position = position_dodge(width = 0.5)) +
+  scale_color_manual(values = c("gray", "blue", "green", "purple"), name = "Testosterone Category") +
+  labs(
+    x = "Age Group",
+    y = "Hazard Ratio (HR)",
+    title = "Vertical Forest Plot of Hazard Ratios with 95% CI",
+    subtitle = "Grouped by Testosterone Category"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "bottom",
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  ) 
+
+# Display the plot
+print(p)
