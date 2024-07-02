@@ -874,3 +874,270 @@ p <- ggplot(results, aes(x = age.group, y = hr)) +
 
 # Display the plot
 print(p)
+
+
+
+
+
+install.packages("tidyverse")
+install.packages("survival")
+install.packages("ggplot2")
+
+
+library(tidyverse)
+library(survival)
+library(ggplot2)
+library(survminer)
+
+qrisksurv <- read.csv("COMPLETE_SURV_DATA.csv")
+
+
+# creating quartiles of the testosterone distribution
+
+quartiles <- quantile(qrisksurv$T, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
+qrisksurv$testosterone_quartile <- cut(qrisksurv$T, breaks = quartiles,
+                                       labels = c("lower", "lower middle", "upper middle", "upper"),
+                                       include.lowest = TRUE)
+
+
+
+qrisksurv <- qrisksurv %>% select(-c("CIGSDAILY"))
+qrisksurv <- qrisksurv %>% select(-c("EXSMOKER"))
+qrisksurv <- qrisksurv %>% select(-c("ICD10", "ICD9"))
+qrisksurv <- qrisksurv %>% select(-c("X.1"))
+qrisksurv <- qrisksurv %>% select(-c("LOST_TO_FOLLOW_UP"))
+qrisksurv <- qrisksurv %>% select(-c("EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING"))
+qrisksurv <- qrisksurv %>% select(-c("X"))
+qrisksurv <- qrisksurv %>% select(-c("ILLFATH", "ILLMOTH", "ILLSIBS"))
+qrisksurv <- qrisksurv %>% select(-c("SBP1", "SBP2"))
+
+
+
+complete_data <- qrisksurv[complete.cases(qrisksurv), ]
+
+
+# age categories 
+
+complete_data$age_group <- cut(complete_data$AGERECRUIT,
+                               breaks = c(-Inf, 50, 60, 70, Inf),
+                               labels = c("40-50", "50-60", "60-70", "70+"),
+                               right = FALSE)
+
+
+
+# deficient, sufficient, and high groups 
+
+# Define cutoff points and labels
+cut_points <- c(-Inf, 12, 18, 25, 30)
+labels <- c("deficient", "sufficient", "high", "very high")
+
+# Create categorical variable for testosterone categories
+complete_data$testosterone_category <- cut(complete_data$T, breaks = cut_points, labels = labels, include.lowest = TRUE)
+
+complete_data$testosterone_category <- relevel(complete_data$testosterone_category, ref = "sufficient")
+
+
+
+
+# SURVIVAL ANALYSIS 
+
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Kaplan-Meier survival curves
+km_fit <- survfit(CADsurv ~ testosterone_category, data = complete_data)
+
+
+
+
+
+cox_model <- coxph(CADsurv~testosterone_category, data = complete_data)
+summary(cox_model)
+
+
+
+
+
+df_40_50 <- filter(complete_data, age_group == "40-50")
+df_50_60 <- filter(complete_data, age_group == "50-60")
+df_60_70 <- filter(complete_data, age_group == "60-70")
+df_70_plus <- filter(complete_data, age_group == "70+")
+
+
+
+CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
+cox_model1 <- coxph(CADsurv~testosterone_category, data = df_40_50)
+summary(cox_model1)
+
+CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
+cox_model2 <- coxph(CADsurv~testosterone_category, data = df_50_60)
+summary(cox_model2)
+
+CADsurv <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
+cox_mode3 <- coxph(CADsurv~testosterone_category, data = df_60_70)
+summary(cox_model3)
+
+CADsurv <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
+cox_model4 <- coxph(CADsurv~testosterone_category, data = df_70_plus)
+summary(cox_model4)
+
+
+
+
+
+
+# Model 1 (age group "40-50")
+CADsurv1 <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
+cox_model1 <- coxph(CADsurv1 ~ testosterone_category, data = df_40_50)
+summary(cox_model1)
+
+# Model 2 (age group "50-60")
+CADsurv2 <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
+cox_model2 <- coxph(CADsurv2 ~ testosterone_category, data = df_50_60)
+summary(cox_model2)
+
+# Model 3 (age group "60-70")
+CADsurv3 <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
+cox_model3 <- coxph(CADsurv3 ~ testosterone_category, data = df_60_70)
+summary(cox_model3)
+
+# Model 4 (age group "70+")
+CADsurv4 <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
+cox_model4 <- coxph(CADsurv4 ~ testosterone_category, data = df_70_plus)
+summary(cox_model4)
+
+
+
+table(complete_data$age_group, complete_data$testosterone_category)
+
+
+
+
+
+
+# making adjustments - just looking at deficient and sufficient 
+
+complete_data$testosterone_binary <- ifelse(complete_data$T < 12, "deficient", "sufficient")
+
+complete_data$testosterone_binary<- factor(complete_data$testosterone_binary, levels = c("deficient", "sufficient"))
+
+# Reorder levels so that "deficient" is the reference category
+complete_data$testosterone_binary <- relevel(complete_data$testosterone_binary, ref = "sufficient")
+
+
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Kaplan-Meier survival curves
+km_fit <- survfit(CADsurv ~ testosterone_binary, data = complete_data)
+
+
+
+
+
+cox_model <- coxph(CADsurv~testosterone_binary, data = complete_data)
+summary(cox_model)
+
+
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$TYPE1DIAB)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$TYPE2DIAB)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$HYPERTENSION)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$CORTICOSTEROIDS)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$ANTIPSYCHOTICS)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$ARTHRITIS)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$AFIB)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$KIDNEY_DISEASE)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$MIGRAINE)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$SLE)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$MENTAL_ILLNESS)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$ED)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$AGERECRUIT)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$DEPRIVATION)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$ETHNICITY_CATEGORY)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
+summary(cox) 
+
+
+complete_data$UKBBSMOKING <- factor(complete_data$UKBBSMOKING, levels = c("", "1", "2", "3", "4", "5"))
+complete_data$UKBBSMOKING <- relevel(complete_data$UKBBSMOKING, ref = "1")
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$UKBBSMOKING)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$SBP)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$SBP_SD)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$CHOLESTEROLTOHDL)
+summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$FAMHISTORY)
+summary(cox) 
+
+
+
+
+
+##### ADJUSTING FOR EVERYTHING 
+
+
+cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI+
+               complete_data$TYPE1DIAB, complete_data$TYPE2DIAB, complete_data$HYPERTENSION+
+               complete_data$CORTICOSTEROIDS+complete_data$ANTIPSYCHOTICS+complete_data$ARTHRITIS+
+               complete_data$AFIB+complete_data$KIDNEY_DISEASE+complete_data$MIGRAINE+
+               complete_data$SLE+complete_data$MENTAL_ILLNESS+complete_data$ED+
+               complete_data$AGERECRUIT+complete_data$DEPRIVATION+complete_data$ETHNICITY_CATEGORY+
+               complete_data$UKBBSMOKING+complete_data$SBP+complete_data$SBP_SD+complete_data$CHOLESTEROLTOHDL+
+               complete_data$FAMHISTORY)
+summary(cox) 
+
+
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Cox proportional hazards model with multiple predictors
+cox <- coxph(
+  formula = CADsurv ~ testosterone_binary + BMI + TYPE1DIAB + TYPE2DIAB + HYPERTENSION +
+    CORTICOSTEROIDS + ANTIPSYCHOTICS + ARTHRITIS + AFIB + KIDNEY_DISEASE +
+    MIGRAINE + SLE + MENTAL_ILLNESS + ED + AGERECRUIT + DEPRIVATION +
+    ETHNICITY_CATEGORY + UKBBSMOKING + SBP + SBP_SD + CHOLESTEROLTOHDL +
+    FAMHISTORY,
+  data = complete_data
+)
+
+# Summarize the model
+summary(cox)
