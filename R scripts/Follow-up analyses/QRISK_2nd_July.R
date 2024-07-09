@@ -322,6 +322,8 @@ surv$cadday <- day(surv$earliest_cad_date_all)
 surv$cadyear <- year(surv$earliest_cad_date_all)
 surv$censyear <- year(surv$censdate)
 
+surv_with_dates <- surv
+
 # changing months to numbers for month of birth
 surv$monthbirthnum <- as.integer(factor(surv$MONTHBIRTH, levels = month.name))
 
@@ -705,177 +707,104 @@ COVARIATES <- merge(COVARIATES, sociodemographics, by = "IID")
 
 
 
-
 ###### merging with the survival data
 
 COMPLETE_DATA <- merge(surv, COVARIATES, by = "IID")
 
 
-sum(complete.cases(COMPLETE_DATA))
 
 
 
-write.csv(COMPLETE_DATA, file = "COMPLETE_SURV_DATA.csv", row.names = TRUE)
 
 
 
 
 
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("CIGSDAILY"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("EXSMOKER"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("ICD10", "ICD9"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("LOST_TO_FOLLOW_UP"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("X"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("ILLFATH", "ILLMOTH", "ILLSIBS"))
+COMPLETE_DATA <- COMPLETE_DATA %>% select(-c("SBP1", "SBP2"))
 
+any(duplicated(surv_with_dates$IID))
+any(duplicated(COMPLETE_DATA$IID))
+surv_with_dates <- surv_with_dates[!duplicated(surv_with_dates$IID), ]
+COMPLETE_DATA <- COMPLETE_DATA[!duplicated(COMPLETE_DATA$IID), ]
 
 
-####### DONE IN THE RAP #################################
 
-install.packages("tidyverse")
-install.packages("survival")
-install.packages("ggplot2")
+REMOVE_CAD_PRIOR_TO_ASSESSMENT <- merge(surv_with_dates, COMPLETE_DATA, by = "IID")
 
 
-library(tidyverse)
-library(survival)
-library(ggplot2)
-library(survminer)
+REMOVE_CAD_PRIOR_TO_ASSESSMENT$DATEASSESSMENT.x <- as.Date(REMOVE_CAD_PRIOR_TO_ASSESSMENT$DATEASSESSMENT.x)
 
-qrisksurv <- read.csv("COMPLETE_SURV_DATA.csv")
+table(REMOVE_CAD_PRIOR_TO_ASSESSMENT$earliest_cad_date_all <= REMOVE_CAD_PRIOR_TO_ASSESSMENT$DATEASSESSMENT.x)
 
+table(REMOVE_CAD_PRIOR_TO_ASSESSMENT$CADBIN.x)
 
-# creating quartiles of the testosterone distribution
 
-quartiles <- quantile(qrisksurv$T, probs = c(0, 0.25, 0.5, 0.75, 1), na.rm = TRUE)
-qrisksurv$testosterone_quartile <- cut(qrisksurv$T, breaks = quartiles,
-                                       labels = c("lower", "lower middle", "upper middle", "upper"),
-                                       include.lowest = TRUE)
 
+dates <- read.csv("TestosteroneCAD/attendance_participant.csv")
 
+names(dates)[names(dates) == "Participant.ID"] <- "IID"
 
-qrisksurv <- qrisksurv %>% select(-c("CIGSDAILY"))
-qrisksurv <- qrisksurv %>% select(-c("EXSMOKER"))
-qrisksurv <- qrisksurv %>% select(-c("ICD10", "ICD9"))
-qrisksurv <- qrisksurv %>% select(-c("X.1"))
-qrisksurv <- qrisksurv %>% select(-c("LOST_TO_FOLLOW_UP"))
-qrisksurv <- qrisksurv %>% select(-c("EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING"))
-qrisksurv <- qrisksurv %>% select(-c("X"))
-qrisksurv <- qrisksurv %>% select(-c("ILLFATH", "ILLMOTH", "ILLSIBS"))
-qrisksurv <- qrisksurv %>% select(-c("SBP1", "SBP2"))
+dat <- merge(REMOVE_CAD_PRIOR_TO_ASSESSMENT, dates, by = "IID")
 
+names(dat)[names(dat) == "Date.of.attending.assessment.centre...Instance.0"] <- "ASSESSMENT_DATE"
 
 
-complete_data <- qrisksurv[complete.cases(qrisksurv), ]
+cleaned_data <- dat %>%
+  filter(is.na(earliest_cad_date_all) | is.na(ASSESSMENT_DATE) | earliest_cad_date_all >= ASSESSMENT_DATE)
 
 
-# age categories 
 
-complete_data$age_group <- cut(complete_data$AGERECRUIT,
-                               breaks = c(-Inf, 50, 60, 70, Inf),
-                               labels = c("40-50", "50-60", "60-70", "70+"),
-                               right = FALSE)
+cleaned_data <- cleaned_data %>% select(-c("MONTHBIRTH.x"))
+cleaned_data <- cleaned_data %>% select(-c("YEARBIRTH.x"))
+cleaned_data <- cleaned_data %>% select(-c("DATEASSESSMENT.x"))
+cleaned_data <- cleaned_data %>% select(-c("AGERECRUIT.y"))
+cleaned_data <- cleaned_data %>% select(-c("LTF"))
+cleaned_data <- cleaned_data %>% select(-c("LTFBIN"))
+cleaned_data <- cleaned_data %>% select(-c("censdate"))
+cleaned_data <- cleaned_data %>% select(-c("cadmonth"))
+cleaned_data <- cleaned_data %>% select(-c("cadday"))
+cleaned_data <- cleaned_data %>% select(-c("cadyear"))
+cleaned_data <- cleaned_data %>% select(-c("censyear"))
+cleaned_data <- cleaned_data %>% select(-c("T.y"))
+cleaned_data <- cleaned_data %>% select(-c("CADBIN.y"))
+cleaned_data <- cleaned_data %>% select(-c("MONTHBIRTH.y"))
+cleaned_data <- cleaned_data %>% select(-c("YEARBIRTH.y"))
 
 
+table(cleaned_data$ASSESSMENT_DATE > cleaned_data$earliest_cad_date_all)
 
-# deficient, sufficient, and high groups 
 
-# Define cutoff points and labels
-cut_points <- c(-Inf, 12, 20, 35, Inf)
-labels <- c("deficient", "sufficient", "high", "very high")
 
-# Create categorical variable for testosterone categories
-complete_data$testosterone_category <- cut(complete_data$T, breaks = cut_points, labels = labels, include.lowest = TRUE)
 
-complete_data$testosterone_category <- relevel(complete_data$testosterone_category, ref = "sufficient")
+cleaned_data$got_CAD <- !is.na(cleaned_data$earliest_cad_date_all)
+cleaned_data$date_comparison <- ifelse(cleaned_data$got_CAD, 
+                               ifelse(cleaned_data$earliest_cad_date_all < cleaned_data$ASSESSMENT_DATE, "Before", "After"),
+                               NA)
 
 
+# Count the number of participants who never got CAD
+num_na_CAD <- sum(is.na(cleaned_data$earliest_cad_date_all))
+sum(cleaned_data$CADBIN.x==1)
 
 
-# SURVIVAL ANALYSIS 
+table(cleaned_data$date_comparison, useNA = "ifany")
 
-# Create survival object
-CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+sum(complete.cases(cleaned_data))
 
-# Fit Kaplan-Meier survival curves
-km_fit <- survfit(CADsurv ~ testosterone_category, data = complete_data)
 
 
-View(km)
+write.csv(cleaned_data, file = "COMPLETE_SURV_DATA.csv", row.names = TRUE)
 
 
 
-cox_model <- coxph(CADsurv~testosterone_category, data = complete_data)
-summary(cox_model)
-
-
-
-
-
-
-
-df_40_50 <- filter(complete_data, age_group == "40-50")
-df_50_60 <- filter(complete_data, age_group == "50-60")
-df_60_70 <- filter(complete_data, age_group == "60-70")
-df_70_plus <- filter(complete_data, age_group == "70+")
-
-
-
-CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
-cox_model1 <- coxph(CADsurv~testosterone_category, data = df_40_50)
-summary(cox_model1)
-
-CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
-cox_model2 <- coxph(CADsurv~testosterone_category, data = df_50_60)
-summary(cox_model2)
-
-CADsurv <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
-cox_mode3 <- coxph(CADsurv~testosterone_category, data = df_60_70)
-summary(cox_model3)
-
-CADsurv <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
-cox_model4 <- coxph(CADsurv~testosterone_category, data = df_70_plus)
-summary(cox_model4)
-
-
-
-
-
-results <- read.csv("TestosteroneCAD/hazard_ratios.csv")
-print(results)
-
-
-
-
-
-results$age.group <- factor(results$age.group, levels = c("overall", "40-50", "50-60", "60-70"))
-
-
-
-
-library(ggplot2)
-
-results$t.category <- factor(results$t.category, levels = c("deficient", "sufficient", "high", "very high"), ordered = TRUE)
-
-# Convert age.group to factor to ensure correct order in the plot
-results$age.group <- factor(results$age.group, levels = c("overall", "40-50", "50-60", "60-70"))
-
-# Plot using ggplot2
-p <- ggplot(results, aes(x = age.group, y = hr)) +
-  geom_point(aes(color = t.category), size = 3, position = position_dodge(width = 0.5)) +
-  geom_errorbar(aes(ymin = lci, ymax = uci, color = t.category), width = 0.2, position = position_dodge(width = 0.5)) +
-  scale_color_manual(values = c("gray", "blue", "green", "purple"), name = "Testosterone Category") +
-  labs(
-    x = "Age Group",
-    y = "Hazard Ratio (HR)",
-    title = "Vertical Forest Plot of Hazard Ratios with 95% CI",
-    subtitle = "Grouped by Testosterone Category"
-  ) +
-  theme_minimal() +
-  theme(
-    legend.position = "bottom",
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
-  ) 
-
-# Display the plot
-print(p)
-
-
+##### THIS SECTION WAS DONE IN THE RAP ####################
 
 
 
@@ -889,7 +818,41 @@ library(survival)
 library(ggplot2)
 library(survminer)
 
-qrisksurv <- read.csv("COMPLETE_SURV_DATA.csv")
+cleaned_data <- read.csv("COMPLETE_SURV_DATA-NEW.csv")
+
+
+cleaned_data <- cleaned_data %>% select(-c("earliest_cad_date_all"))
+cleaned_data <- cleaned_data %>% select(-c("date_comparison"))
+
+
+complete_data <- cleaned_data[complete.cases(cleaned_data), ]
+
+qrisksurv <- complete_data
+
+names(qrisksurv)[names(qrisksurv) == "T.x"] <- "T"
+names(qrisksurv)[names(qrisksurv) == "CADBIN.x"] <- "CADBIN"
+
+
+# fixing the ethnicity labelling 
+
+
+
+unique(complete_data$ETHNICITY_CATEGORY)
+
+complete_data$ETHNICITY_CATEGORY <- factor(complete_data$ETHNICITY_CATEGORY, levels = unique(complete_data$ETHNICITY_CATEGORY), labels = c(
+  "White or not stated",
+  "Indian",
+  "Pakistani",
+  "Bangladeshi",
+  "Other Asian",
+  "Black Caribbean",
+  "Black African",
+  "Chinese",
+  "Other ethnic group"
+))
+
+complete_data$ETHNICITY_CATEGORY <- relevel(complete_data$ETHNICITY_CATEGORY, ref = "White or not stated")
+
 
 
 # creating quartiles of the testosterone distribution
@@ -901,28 +864,18 @@ qrisksurv$testosterone_quartile <- cut(qrisksurv$T, breaks = quartiles,
 
 
 
-qrisksurv <- qrisksurv %>% select(-c("CIGSDAILY"))
-qrisksurv <- qrisksurv %>% select(-c("EXSMOKER"))
-qrisksurv <- qrisksurv %>% select(-c("ICD10", "ICD9"))
-qrisksurv <- qrisksurv %>% select(-c("X.1"))
-qrisksurv <- qrisksurv %>% select(-c("LOST_TO_FOLLOW_UP"))
-qrisksurv <- qrisksurv %>% select(-c("EVERSMOKED", "SMOKINGSTATUS", "CURRENTSMOKING"))
-qrisksurv <- qrisksurv %>% select(-c("X"))
-qrisksurv <- qrisksurv %>% select(-c("ILLFATH", "ILLMOTH", "ILLSIBS"))
-qrisksurv <- qrisksurv %>% select(-c("SBP1", "SBP2"))
 
-
-
-complete_data <- qrisksurv[complete.cases(qrisksurv), ]
 
 
 # age categories 
 
-complete_data$age_group <- cut(complete_data$AGERECRUIT,
-                               breaks = c(-Inf, 50, 60, 70, Inf),
-                               labels = c("40-50", "50-60", "60-70", "70+"),
-                               right = FALSE)
+qrisksurv$age_group <- cut(qrisksurv$AGERECRUIT.x,
+                           breaks = c(40, 45, 50, 55, 60, 65, 70, Inf),
+                           labels = c("40-45", "45-50", "50-55", "55-60", "60-65", "65-70", "70+"),
+                           right = FALSE)
 
+
+complete_data <- qrisksurv
 
 
 # deficient, sufficient, and high groups 
@@ -940,78 +893,6 @@ complete_data$testosterone_category <- relevel(complete_data$testosterone_catego
 
 
 # SURVIVAL ANALYSIS 
-
-# Create survival object
-CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
-
-# Fit Kaplan-Meier survival curves
-km_fit <- survfit(CADsurv ~ testosterone_category, data = complete_data)
-
-
-
-
-
-cox_model <- coxph(CADsurv~testosterone_category, data = complete_data)
-summary(cox_model)
-
-
-
-
-
-df_40_50 <- filter(complete_data, age_group == "40-50")
-df_50_60 <- filter(complete_data, age_group == "50-60")
-df_60_70 <- filter(complete_data, age_group == "60-70")
-df_70_plus <- filter(complete_data, age_group == "70+")
-
-
-
-CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
-cox_model1 <- coxph(CADsurv~testosterone_category, data = df_40_50)
-summary(cox_model1)
-
-CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
-cox_model2 <- coxph(CADsurv~testosterone_category, data = df_50_60)
-summary(cox_model2)
-
-CADsurv <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
-cox_mode3 <- coxph(CADsurv~testosterone_category, data = df_60_70)
-summary(cox_model3)
-
-CADsurv <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
-cox_model4 <- coxph(CADsurv~testosterone_category, data = df_70_plus)
-summary(cox_model4)
-
-
-
-
-
-
-# Model 1 (age group "40-50")
-CADsurv1 <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
-cox_model1 <- coxph(CADsurv1 ~ testosterone_category, data = df_40_50)
-summary(cox_model1)
-
-# Model 2 (age group "50-60")
-CADsurv2 <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
-cox_model2 <- coxph(CADsurv2 ~ testosterone_category, data = df_50_60)
-summary(cox_model2)
-
-# Model 3 (age group "60-70")
-CADsurv3 <- Surv(time = df_60_70$timetoEVENT, event = df_60_70$CADBIN)
-cox_model3 <- coxph(CADsurv3 ~ testosterone_category, data = df_60_70)
-summary(cox_model3)
-
-# Model 4 (age group "70+")
-CADsurv4 <- Surv(time = df_70_plus$timetoEVENT, event = df_70_plus$CADBIN)
-cox_model4 <- coxph(CADsurv4 ~ testosterone_category, data = df_70_plus)
-summary(cox_model4)
-
-
-
-table(complete_data$age_group, complete_data$testosterone_category)
-
-
-
 
 
 
@@ -1031,17 +912,66 @@ CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
 # Fit Kaplan-Meier survival curves
 km_fit <- survfit(CADsurv ~ testosterone_binary, data = complete_data)
 
+dev.off()
 
+plot(
+  km_fit,
+  col = c("blue", "red"),           # Colors for the curves
+  lty = 1:2,                        # Line types for the curves
+  xlab = "Time to Event",
+  ylab = "Survival Probability",
+  main = "Kaplan-Meier Survival Curves"
+)
+
+
+
+
+
+
+
+# Function to calculate rates and CIs
+calculate_rates <- function(complete_data, age_group) {
+  group_data <- complete_data %>% filter(age_group == !!age_group)
+  person_years <- sum(group_data$timetoEVENT)
+  incident_cases <- sum(group_data$CADBIN)
+  rate_per_1000 <- (incident_cases / person_years) * 1000
+  se_rate <- sqrt(incident_cases) / person_years * 1000
+  lower_ci <- rate_per_1000 - 1.96 * se_rate
+  upper_ci <- rate_per_1000 + 1.96 * se_rate
+  c(Rate_per_1000 = rate_per_1000, Lower_CI = lower_ci, Upper_CI = upper_ci, Person_Years = person_years, Incident_Cases = incident_cases)
+}
+
+# List of age groups
+age_groups <- levels(complete_data$age_group)
+
+# Calculate for each group
+results <- data.frame()
+for (age_group in age_groups) {
+  rates <- calculate_rates(complete_data, age_group)
+  results <- rbind(results, data.frame(Age_Group = age_group, t(rates)))
+}
+
+# View results
+print(results)
+
+write.csv(results, "cardiovascular_disease_rates.csv", row.names = FALSE)
 
 
 
 cox_model <- coxph(CADsurv~testosterone_binary, data = complete_data)
 summary(cox_model)
 
+cox_summary <- summary(cox_model)
+
+
+
 
 
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
 summary(cox) 
+
+cox <- coxph(CADsurv~complete_data$BMI)
+summary(cox)
 
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$TYPE1DIAB)
 summary(cox) 
@@ -1092,7 +1022,7 @@ cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
 summary(cox) 
 
 
-complete_data$UKBBSMOKING <- factor(complete_data$UKBBSMOKING, levels = c("", "1", "2", "3", "4", "5"))
+complete_data$UKBBSMOKING <- factor(complete_data$UKBBSMOKING, levels = c("1", "2", "3", "4", "5"))
 complete_data$UKBBSMOKING <- relevel(complete_data$UKBBSMOKING, ref = "1")
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$UKBBSMOKING)
 summary(cox) 
@@ -1115,25 +1045,11 @@ summary(cox)
 
 ##### ADJUSTING FOR EVERYTHING 
 
-
-cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI+
-               complete_data$TYPE1DIAB, complete_data$TYPE2DIAB, complete_data$HYPERTENSION+
-               complete_data$CORTICOSTEROIDS+complete_data$ANTIPSYCHOTICS+complete_data$ARTHRITIS+
-               complete_data$AFIB+complete_data$KIDNEY_DISEASE+complete_data$MIGRAINE+
-               complete_data$SLE+complete_data$MENTAL_ILLNESS+complete_data$ED+
-               complete_data$AGERECRUIT+complete_data$DEPRIVATION+complete_data$ETHNICITY_CATEGORY+
-               complete_data$UKBBSMOKING+complete_data$SBP+complete_data$SBP_SD+complete_data$CHOLESTEROLTOHDL+
-               complete_data$FAMHISTORY)
-summary(cox) 
-
-
-CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
-
 # Fit Cox proportional hazards model with multiple predictors
 cox <- coxph(
   formula = CADsurv ~ testosterone_binary + BMI + TYPE1DIAB + TYPE2DIAB + HYPERTENSION +
     CORTICOSTEROIDS + ANTIPSYCHOTICS + ARTHRITIS + AFIB + KIDNEY_DISEASE +
-    MIGRAINE + SLE + MENTAL_ILLNESS + ED + AGERECRUIT + DEPRIVATION +
+    MIGRAINE + SLE + MENTAL_ILLNESS + ED + AGERECRUIT.x + DEPRIVATION +
     ETHNICITY_CATEGORY + UKBBSMOKING + SBP + SBP_SD + CHOLESTEROLTOHDL +
     FAMHISTORY,
   data = complete_data
@@ -1141,3 +1057,218 @@ cox <- coxph(
 
 # Summarize the model
 summary(cox)
+
+
+
+cox_summary <- summary(cox)
+
+
+results <- data.frame(
+  exp_coef = cox_summary$coefficients[, "exp(coef)"],
+  p_value = cox_summary$coefficients[, "Pr(>|z|)"],
+  lower_ci = cox_summary$conf.int[, 1],  # Lower 95% CI
+  upper_ci = cox_summary$conf.int[, 2]   # Upper 95% CI
+)
+
+write.csv(results, file = "cox_model_results.csv", row.names = FALSE)
+
+
+
+
+
+### now having a LOOK AT THE DISTRIBUTION BY AGES ############################
+
+
+complete_data$testosterone_quartile <- factor(complete_data$testosterone_quartile, 
+                                              levels = c("upper", "lower", "lower middle", "upper middle"))
+
+# Check the factor levels to confirm releveling
+levels(complete_data$testosterone_quartile)
+
+
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Kaplan-Meier survival curves
+km_fit <- survfit(CADsurv ~ testosterone_quartile, data = complete_data)
+
+
+
+
+
+cox_model <- coxph(CADsurv~testosterone_quartile, data = complete_data)
+summary(cox_model)
+
+
+
+
+
+
+
+
+
+
+df_40_50 <- filter(complete_data, age_group == "40-45" | age_group == "45-50")
+df_50_60 <- filter(complete_data, age_group == "50-55" | age_group == "55-60")
+df_60plus <- filter(complete_data, age_group == "60-65" | age_group == "65-70" | age_group == "70+")
+
+
+
+
+CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
+cox_model1 <- coxph(CADsurv~testosterone_quartile, data = df_40_50)
+summary(cox_model1)
+
+CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
+cox_model2 <- coxph(CADsurv~testosterone_quartile, data = df_50_60)
+summary(cox_model2)
+
+CADsurv <- Surv(time = df_60plus$timetoEVENT, event = df_60plus$CADBIN)
+cox_model3 <- coxph(CADsurv~testosterone_quartile, data = df_60plus)
+summary(cox_model3)
+
+
+
+
+
+
+
+# Load necessary library
+library(survival)
+
+# Assuming df_40_50, df_50_60, and df_60plus already exist with the required columns
+
+# Define a function to extract model summary
+extract_cox_summary <- function(cox_model, model_name) {
+  cox_summary <- summary(cox_model)
+  data.frame(
+    model = model_name,
+    variable = rownames(cox_summary$coefficients),
+    exp_coef = cox_summary$coefficients[, "exp(coef)"],
+    p_value = cox_summary$coefficients[, "Pr(>|z|)"],
+    lower_ci = cox_summary$conf.int[, "lower .95"],
+    upper_ci = cox_summary$conf.int[, "upper .95"]
+  )
+}
+
+# Model 1: Age 40-50
+CADsurv_40_50 <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
+cox_model1 <- coxph(CADsurv_40_50 ~ testosterone_quartile, data = df_40_50)
+results1 <- extract_cox_summary(cox_model1, "40-50")
+
+# Model 2: Age 50-60
+CADsurv_50_60 <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
+cox_model2 <- coxph(CADsurv_50_60 ~ testosterone_quartile, data = df_50_60)
+results2 <- extract_cox_summary(cox_model2, "50-60")
+
+# Model 3: Age 60+
+CADsurv_60plus <- Surv(time = df_60plus$timetoEVENT, event = df_60plus$CADBIN)
+cox_model3 <- coxph(CADsurv_60plus ~ testosterone_quartile, data = df_60plus)
+results3 <- extract_cox_summary(cox_model3, "60+")
+
+# Combine results into one dataframe
+combined_results <- rbind(results1, results2, results3)
+
+# Print or view the combined results dataframe
+print(combined_results)
+
+
+write.csv(combined_results, file = "combined_cox_model_results.csv", row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+####### READING IN THE RESULTS FROM THE RAP TO CREATE SOME PLOTS ######
+
+person_years <- read.csv("TestosteroneCAD/Data_from_RAP/cardiovascular_disease_rates.csv")
+cox_model_all_mediators <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_results.csv")
+cox_model_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/combined_cox_model_results.csv")
+cox_model_confints <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_confintervals.csv")
+
+
+print(cox_model_all_mediators)
+
+print(cox_model_stratified)
+print(cox_model_confints)
+
+
+cox_model_results <- merge(cox_model_all_mediators, cox_model_confints, by = "X")
+
+
+
+write.csv(cox_model_results, file = "cox_model_results.csv", row.names = TRUE)
+
+
+# Convert model to factor to control order
+cox_model_stratified$model <- factor(cox_model_stratified$model, levels = c("40-50", "50-60", "60+"))
+
+# Convert testosterone.quartile to factor with desired order
+# We want "upper" to appear last within each model level
+cox_model_stratified$testosterone.quartile <- factor(cox_model_stratified$testosterone.quartile,
+                                                     levels = c("lower", "lower middle", "upper middle", "upper"))
+
+# Plotting using ggplot2
+ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
+  geom_point(position = position_dodge(width = 0.3), size = 3) +
+  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
+  labs(title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
+       x = "Age Group",
+       y = "Hazard Ratio (exp_coef)",
+       color = "Testosterone Status") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black")  # Add a line at HR = 1 (null effect)
+
+
+testosterone_colors <- c("lower" = "#66c2a5",          # greenish
+                         "lower middle" = "#fc8d62",   # reddish
+                         "upper middle" = "#8da0cb",   # bluish
+                         "upper" = "#e78ac3")          # pinkish
+
+# Plotting using ggplot2
+plot <- ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
+  geom_point(position = position_dodge(width = 0.3), size = 3) +
+  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
+  labs(title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
+       x = "Age Group",
+       y = "Hazard Ratio",
+       color = "Testosterone Status") +
+  scale_color_manual(values = testosterone_colors) +  # Use custom colors
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 10)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank())  # Remove horizontal gridlines for cleaner look
+
+
+
+
+ggsave("forest_plot.png", plot = plot, width = 8, height = 6, dpi = 300)
+
+
