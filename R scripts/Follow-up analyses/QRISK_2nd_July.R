@@ -330,14 +330,26 @@ surv$monthbirthnum <- as.integer(factor(surv$MONTHBIRTH, levels = month.name))
 # creating a censoring variable = anyone who does not come up as a CAD case
 surv$censored <- ifelse(surv$CADBIN == 0, 1, 0)
 
+
+## DATE OF ASSESSMENT VARIABLE
+
+dates <- read.csv("TestosteroneCAD/attendance_participant.csv")
+
+names(dates)[names(dates) == "Participant.ID"] <- "IID"
+
+surv <- merge(surv, dates, by = "IID")
+
+names(surv)[names(surv) == "Date.of.attending.assessment.centre...Instance.0"] <- "ASSESSMENT_DATE"
+
+
 # creating a year of recruitment variable - this will be inaccurate 
-surv$year_of_recruitment <- surv$YEARBIRTH + surv$AGERECRUIT
+surv$year_of_recruitment <- year(surv$ASSESSMENT_DATE)
 
 # creating a time to event variable
-surv$timetoCAD <- surv$cadyear-surv$YEARBIRTH
+surv$timetoCAD <- surv$cadyear-surv$year_of_recruitment
 
 # creating a time to censoring variable 
-surv$timetoCENSOR <- ifelse(surv$censored == 1, surv$censyear - surv$YEARBIRTH, NA)
+surv$timetoCENSOR <- ifelse(surv$censored == 1, surv$censyear - surv$year_of_recruitment, NA)
 
 # creating a general time to event variable 
 surv$timetoEVENT <- ifelse(is.na(surv$timetoCENSOR), surv$timetoCAD, surv$timetoCENSOR)
@@ -347,6 +359,14 @@ surv$timetoEVENT <- ifelse(is.na(surv$timetoCENSOR), surv$timetoCAD, surv$timeto
 
 # need complete cases for testosterone deficiency 
 # surv <- surv[complete.cases(surv$T.x), ]
+
+any(duplicated(surv$IID))
+any(duplicated(surv$IID))
+surv <- surv[!duplicated(surv$IID), ]
+surv <- surv[!duplicated(surv$IID), ]
+
+surv$timetoCAD2 <- difftime(surv$earliest_cad_date_all, surv$timetoEVENT, units = "weeks")
+
 
 # select relevant columns 
 
@@ -361,10 +381,6 @@ write.csv(surv_key_variables, "CAD_SURV.csv", row.names = TRUE)
 
 
 
-
-#################################################################################
-####################### COPY THIS SECTION INTO THE RAP ##########################
-########################################################################################
 
 library(tidyverse)
 library(survival)
@@ -443,16 +459,16 @@ other_illness <- other_illness %>%
 
 other_illness <- other_illness %>%
   mutate(AFIB = if_else(grepl("I48", other_illness$ICD10) | 
-                               grepl("1471|1483", other_illness$SELFREPORT)|
-                               grepl("4273|4720", other_illness$ICD9), 1, 0))
+                          grepl("1471|1483", other_illness$SELFREPORT)|
+                          grepl("4273|4720", other_illness$ICD9), 1, 0))
 
 
 ##### chronic kidney disease
 
 other_illness <- other_illness %>%
   mutate(KIDNEY_DISEASE = if_else(grepl("N183|N184|N185", other_illness$ICD10) | 
-                               grepl("1192|1519|1609", other_illness$SELFREPORT)|
-                               grepl("5853|5855|5810|5820|5900|V420|V451", other_illness$ICD9), 1, 0))
+                                    grepl("1192|1519|1609", other_illness$SELFREPORT)|
+                                    grepl("5853|5855|5810|5820|5900|V420|V451", other_illness$ICD9), 1, 0))
 
 
 
@@ -461,16 +477,16 @@ other_illness <- other_illness %>%
 
 other_illness <- other_illness %>%
   mutate(MIGRAINE = if_else(grepl("G43|G440|N943", other_illness$ICD10) | 
-                               grepl("1265", other_illness$SELFREPORT)|
-                               grepl("346", other_illness$ICD9), 1, 0))
+                              grepl("1265", other_illness$SELFREPORT)|
+                              grepl("346", other_illness$ICD9), 1, 0))
 
 
 ##### SLE 
 
 other_illness <- other_illness %>%
   mutate(SLE = if_else(grepl("M32", other_illness$ICD10) | 
-                              grepl("1381", other_illness$SELFREPORT)|
-                              grepl("7100", other_illness$ICD9), 1, 0))
+                         grepl("1381", other_illness$SELFREPORT)|
+                         grepl("7100", other_illness$ICD9), 1, 0))
 
 
 
@@ -478,8 +494,8 @@ other_illness <- other_illness %>%
 
 other_illness <- other_illness %>%
   mutate(MENTAL_ILLNESS = if_else(grepl("F03|F068|F09|F20|F22|F23|F259|F28|F29|F31|F39|F53|F333", other_illness$ICD10) | 
-                              grepl("1289|1291", other_illness$SELFREPORT)|
-                              grepl("295|298|296", other_illness$ICD9), 1, 0))
+                                    grepl("1289|1291", other_illness$SELFREPORT)|
+                                    grepl("295|298|296", other_illness$ICD9), 1, 0))
 
 
 
@@ -487,8 +503,8 @@ other_illness <- other_illness %>%
 
 other_illness <- other_illness %>%
   mutate(ED = if_else(grepl("N484", other_illness$ICD10) | 
-                              grepl("1518", other_illness$SELFREPORT)|
-                              grepl("60784", other_illness$ICD9)|
+                        grepl("1518", other_illness$SELFREPORT)|
+                        grepl("60784", other_illness$ICD9)|
                         grepl("1141168936|1141168948|1141168944|1141168946|1140869100|1140883010", other_illness$MEDICATION), 1, 0))
 
 
@@ -567,8 +583,8 @@ sociodemographics$exsmoker <- ifelse(sociodemographics$Ever.smoked...Instance.0 
 sociodemographics$nonsmoker <- ifelse(sociodemographics$Ever.smoked...Instance.0 == "0" ,"1",NA)
 sociodemographics$NUM_CIGS_DAILY <- as.numeric(sociodemographics$Number.of.cigarettes.currently.smoked.daily..current.cigarette.smokers....Instance.0)
 sociodemographics$SmokingCategory <- ifelse(sociodemographics$NUM_CIGS_DAILY < 10 & sociodemographics$NUM_CIGS_DAILY > 0, "3",
-                                    ifelse(sociodemographics$NUM_CIGS_DAILY >= 10 & sociodemographics$NUM_CIGS_DAILY < 20, "4", 
-                                           ifelse(sociodemographics$NUM_CIGS_DAILY >= 20, "5", NA)))
+                                            ifelse(sociodemographics$NUM_CIGS_DAILY >= 10 & sociodemographics$NUM_CIGS_DAILY < 20, "4", 
+                                                   ifelse(sociodemographics$NUM_CIGS_DAILY >= 20, "5", NA)))
 
 
 
@@ -785,8 +801,8 @@ table(cleaned_data$ASSESSMENT_DATE > cleaned_data$earliest_cad_date_all)
 
 cleaned_data$got_CAD <- !is.na(cleaned_data$earliest_cad_date_all)
 cleaned_data$date_comparison <- ifelse(cleaned_data$got_CAD, 
-                               ifelse(cleaned_data$earliest_cad_date_all < cleaned_data$ASSESSMENT_DATE, "Before", "After"),
-                               NA)
+                                       ifelse(cleaned_data$earliest_cad_date_all < cleaned_data$ASSESSMENT_DATE, "Before", "After"),
+                                       NA)
 
 
 # Count the number of participants who never got CAD
@@ -798,27 +814,37 @@ table(cleaned_data$date_comparison, useNA = "ifany")
 
 sum(complete.cases(cleaned_data))
 
+summary(complete_data$timetoEVENT)
+
 
 
 write.csv(cleaned_data, file = "COMPLETE_SURV_DATA.csv", row.names = TRUE)
 
 
 
-##### THIS SECTION WAS DONE IN THE RAP ####################
+
+####### THIS SCRIPT ALSO EXISTS IN THE q_risk_time_in_biobank 0907.R script
+####### in your local environment 
+####### that script contains the data cleaning 
+####### in this section of the script we are running the models as this 
+####### is the part that cannot be done in R 
+
 
 
 
 install.packages("tidyverse")
 install.packages("survival")
 install.packages("ggplot2")
-
-
+install.packages("broom")
+install.packages("dplyr")
+library(broom)
+library(dplyr)
 library(tidyverse)
 library(survival)
 library(ggplot2)
-library(survminer)
 
-cleaned_data <- read.csv("COMPLETE_SURV_DATA-NEW.csv")
+
+cleaned_data <- read.csv("COMPLETE_SURV_DAT-NEW.csv")
 
 
 cleaned_data <- cleaned_data %>% select(-c("earliest_cad_date_all"))
@@ -839,17 +865,10 @@ names(qrisksurv)[names(qrisksurv) == "CADBIN.x"] <- "CADBIN"
 
 unique(complete_data$ETHNICITY_CATEGORY)
 
-complete_data$ETHNICITY_CATEGORY <- factor(complete_data$ETHNICITY_CATEGORY, levels = unique(complete_data$ETHNICITY_CATEGORY), labels = c(
-  "White or not stated",
-  "Indian",
-  "Pakistani",
-  "Bangladeshi",
-  "Other Asian",
-  "Black Caribbean",
-  "Black African",
-  "Chinese",
-  "Other ethnic group"
-))
+table(complete_data$ETHNICITY_CATEGORY)
+
+complete_data$ETHNICITY_CATEGORY <- as.factor(complete_data$ETHNICITY_CATEGORY)
+
 
 complete_data$ETHNICITY_CATEGORY <- relevel(complete_data$ETHNICITY_CATEGORY, ref = "White or not stated")
 
@@ -877,6 +896,13 @@ qrisksurv$age_group <- cut(qrisksurv$AGERECRUIT.x,
 
 complete_data <- qrisksurv
 
+
+
+### smoking variable
+
+
+complete_data$UKBBSMOKING <- factor(complete_data$UKBBSMOKING, levels = c("1", "2", "3", "4", "5"))
+complete_data$UKBBSMOKING <- relevel(complete_data$UKBBSMOKING, ref = "1")
 
 # deficient, sufficient, and high groups 
 
@@ -958,14 +984,8 @@ write.csv(results, "cardiovascular_disease_rates.csv", row.names = FALSE)
 
 
 
-cox_model <- coxph(CADsurv~testosterone_binary, data = complete_data)
-summary(cox_model)
-
-cox_summary <- summary(cox_model)
-
-
-
-
+cox <- coxph(CADsurv~testosterone_binary, data = complete_data)
+summary(cox)
 
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
 summary(cox) 
@@ -1022,8 +1042,6 @@ cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$BMI)
 summary(cox) 
 
 
-complete_data$UKBBSMOKING <- factor(complete_data$UKBBSMOKING, levels = c("1", "2", "3", "4", "5"))
-complete_data$UKBBSMOKING <- relevel(complete_data$UKBBSMOKING, ref = "1")
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$UKBBSMOKING)
 summary(cox) 
 
@@ -1038,6 +1056,73 @@ summary(cox)
 
 cox <- coxph(CADsurv~complete_data$testosterone_binary+complete_data$FAMHISTORY)
 summary(cox) 
+
+
+
+
+
+
+
+# Define a function to extract Cox model results from the summary
+extract_cox_summary <- function(model, model_name) {
+  summary_model <- summary(model)
+  coef <- summary_model$coefficients
+  confint <- summary_model$conf.int
+  results <- data.frame(
+    model = model_name,
+    hazard_ratio = coef[, "exp(coef)"],
+    p.value = coef[, "Pr(>|z|)"],
+    conf.low = confint[, "lower .95"],
+    conf.high = confint[, "upper .95"]
+  )
+  return(results)
+}
+
+# Define a list of models with their names
+models <- list(
+  "testosterone_binary" = coxph(CADsurv ~ testosterone_binary, data = complete_data),
+  "testosterone_binary + BMI" = coxph(CADsurv ~ testosterone_binary + BMI, data = complete_data),
+  "testosterone_binary + TYPE1DIAB" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$TYPE1DIAB),
+  "testosterone_binary + TYPE2DIAB" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$TYPE2DIAB),
+  "testosterone_binary + HYPERTENSION" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$HYPERTENSION),
+  "testosterone_binary + CORTICOSTEROIDS" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$CORTICOSTEROIDS),
+  "testosterone_binary + ANTIPSYCHOTICS" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$ANTIPSYCHOTICS),
+  "testosterone_binary + ARTHRITIS" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$ARTHRITIS),
+  "testosterone_binary + AFIB" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$AFIB),
+  "testosterone_binary + KIDNEY_DISEASE" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$KIDNEY_DISEASE),
+  "testosterone_binary + MIGRAINE" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$MIGRAINE),
+  "testosterone_binary + SLE" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$SLE),
+  "testosterone_binary + MENTAL_ILLNESS" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$MENTAL_ILLNESS),
+  "testosterone_binary + ED" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$ED),
+  "testosterone_binary + AGERECRUIT" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$AGERECRUIT),
+  "testosterone_binary + DEPRIVATION" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$DEPRIVATION),
+  "testosterone_binary + ETHNICITY_CATEGORY" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$ETHNICITY_CATEGORY),
+  "testosterone_binary + UKBBSMOKING" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$UKBBSMOKING),
+  "testosterone_binary + SBP" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$SBP),
+  "testosterone_binary + SBP_SD" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$SBP_SD),
+  "testosterone_binary + CHOLESTEROLTOHDL" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$CHOLESTEROLTOHDL),
+  "testosterone_binary + FAMHISTORY" = coxph(CADsurv ~ complete_data$testosterone_binary + complete_data$FAMHISTORY)
+)
+
+# Extract results for each model and combine them into a single table
+combined_results <- bind_rows(lapply(names(models), function(model_name) {
+  model <- models[[model_name]]
+  extract_cox_summary(model, model_name)
+}))
+
+# Print the combined results
+print(combined_results)
+
+# Save the results to a CSV file (optional)
+write.csv(combined_results, file = "separate_mediators.csv", row.names = TRUE)
+
+
+
+
+
+
+
+
 
 
 
@@ -1070,7 +1155,7 @@ results <- data.frame(
   upper_ci = cox_summary$conf.int[, 2]   # Upper 95% CI
 )
 
-write.csv(results, file = "cox_model_results.csv", row.names = FALSE)
+write.csv(results, file = "cox_model_results.csv", row.names = TRUE)
 
 
 
@@ -1130,6 +1215,21 @@ summary(cox_model3)
 
 
 
+table(df_40_50$testosterone_quartile, df_40_50$CADBIN)
+df_40_50 %>%
+  group_by(testosterone_quartile) %>%
+  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
+
+
+table(df_50_60$testosterone_quartile, df_50_60$CADBIN)
+df_50_60 %>%
+  group_by(testosterone_quartile) %>%
+  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
+
+table(df_60plus$testosterone_quartile, df_60plus$CADBIN)
+df_60plus %>%
+  group_by(testosterone_quartile) %>%
+  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
 
 
 
@@ -1181,23 +1281,20 @@ write.csv(combined_results, file = "combined_cox_model_results.csv", row.names =
 
 
 
+# fitting an interaction cox model 
 
 
 
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
 
 
+cox <- coxph(CADsurv~complete_data$T*complete_data$AGERECRUIT.x)
+summary(cox) 
 
 
-
-
-
-
-
-
-
-
-
-
+cox <- coxph(CADsurv~complete_data$testosterone_quartile*complete_data$age_group)
+summary(cox) 
 
 
 
@@ -1209,20 +1306,9 @@ write.csv(combined_results, file = "combined_cox_model_results.csv", row.names =
 person_years <- read.csv("TestosteroneCAD/Data_from_RAP/cardiovascular_disease_rates.csv")
 cox_model_all_mediators <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_results.csv")
 cox_model_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/combined_cox_model_results.csv")
-cox_model_confints <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_confintervals.csv")
-
-
-print(cox_model_all_mediators)
-
-print(cox_model_stratified)
-print(cox_model_confints)
-
-
-cox_model_results <- merge(cox_model_all_mediators, cox_model_confints, by = "X")
 
 
 
-write.csv(cox_model_results, file = "cox_model_results.csv", row.names = TRUE)
 
 
 # Convert model to factor to control order
@@ -1269,6 +1355,47 @@ plot <- ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_c
 
 
 
-ggsave("forest_plot.png", plot = plot, width = 8, height = 6, dpi = 300)
+ggsave("forest_plot_age_stratified.png", plot = plot, width = 8, height = 6, dpi = 300)
+
+
+
+
+plot <- ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
+  geom_point(position = position_dodge(width = 0.3), size = 3) +
+  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
+  labs(
+    title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
+    x = "Age Group",
+    y = "Hazard Ratio",
+    color = "Testosterone Status"
+  ) +
+  scale_color_manual(values = testosterone_colors) +  # Use custom colors
+  theme_minimal() +
+  theme(
+    axis.text.y = element_text(size = 12),  # Increase y-axis text size
+    axis.text.x = element_text(size = 12),  # Increase x-axis text size
+    axis.title.x = element_text(size = 14), # Increase x-axis title size
+    axis.title.y = element_text(size = 14), # Increase y-axis title size
+    plot.title = element_text(size = 16, face = "bold"), # Increase plot title size and make it bold
+    legend.text = element_text(size = 12),  # Increase legend text size
+    legend.title = element_text(size = 14)  # Increase legend title size
+  ) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(
+    panel.grid.major.x = element_blank(),
+    panel.grid.minor.x = element_blank()
+  )
+
+
+
+
+
+
+
+
+
+
+
+
 
 
