@@ -1,5 +1,3 @@
-
-install.packages("xfun")
 ##################################################################################
 
 # HARMONISATION AND MR
@@ -9,8 +7,11 @@ library(tidyverse)
 library(readxl)
 library(MendelianRandomization)
 
+
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
+
 # looking at the allele matching and frequencies etc.
-M_T_proxies_output <- read_excel("not found inputs/SNPs_M_Testosterone_AND_CAD.xlsx", sheet = "FREE T E&O")
+M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_Testosterone_AND_CAD.xlsx", sheet = "FREE T E&O")
 
 
 
@@ -103,6 +104,34 @@ abline(inverse_weighted_LR, col = "red")
 mr_plot(MRObject, interactive=TRUE, labels=TRUE)
 mr_forest(MRObject, ordered=TRUE)
 mr_loo(MRObject)
+plot_object <- mr_loo(MRObject)
+
+
+customized_plot <- plot_object +
+  ggtitle("Leave-One-Out MR Plot") +  # Adding a title
+  xlab("Effect size estimate") +                       # Custom x-axis label
+  ylab("SNPs") +               # Custom y-axis label
+  theme_minimal() +                   # Applying a minimal theme for a clean look
+  theme(
+    plot.title = element_text(size = 16, face = "bold", hjust = 0.5), # Centered title
+    axis.title = element_text(size = 14),
+    axis.text = element_text(size = 12),
+    legend.position = "bottom",              # Moving the legend to the bottom
+    legend.title = element_blank(),          # Removing the legend title for simplicity
+    axis.text.y = element_blank(),           # Removing y-axis text
+    axis.title.y = element_blank(),          # Removing y-axis title
+    axis.ticks.y = element_blank(),          # Removing y-axis ticks
+    panel.grid.major = element_blank(),  # Light grey grid lines
+    panel.grid.minor = element_blank(),                  # Removing minor grid lines
+    plot.background = element_rect(fill = "white", color = "white"), # White background
+    panel.border = element_blank()           # Removing panel border
+  ) +
+  geom_point(color = "blue", linewidth = 2) +        # Blue points for better visibility
+  geom_smooth(method = "lm", se = FALSE, color = "red", size = 1) # Red trend line
+
+# Display the customized plot
+print(customized_plot)
+
 mr_funnel(MRObject)
 ??mr_funnel
 
