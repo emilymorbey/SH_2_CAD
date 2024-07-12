@@ -7,6 +7,54 @@ library(cli)
 library(data.table)
 library(ggplot2)
 
+
+#############            STEP 1: DATA CLEANING              #####################  
+
+################################################################################
+###########  THIS SECTION OF THE SCRIPT WAS RUN IN RSTUDIO  #####################
+##########   ON A LOCAL DEVICE. DATA WAS DOWNLOADED USING  #####################
+##########   COHORT BROWSER IN UK BIOBANK RAP. DATA ON     #####################
+#########    SURVIVAL VARIABLES, DIAGNOSTIC CRITERIA FOR  ######################
+##########   CAD AND DATA ON COVARIATES WERE DOWNLOADED    #####################
+##########   INTO SEPARATE FILES ONTO A LOCAL DRIVE        #####################
+###########  FILE NAMES FOR EACH OF THESE FILE TYPES       #####################
+##########   ARE AS FOLLOWS:                                      ###############
+##########   SURVIVAL DATA: data_participant_surv_2.csv          ################
+##########   ICD10 CODES:   male_icd10_1.csv and male_icd10_2.csv   ############
+#########    POTENTIAL CAD PHENOTYPES: new_cad_1.csv and new_cad_2.csv #########
+#########    DATE OF ATTENDANCE: attendance_participant.csv            #########
+#########    MEDICATIONS: medications_participant.csv                  #########
+#########    SOCIODEMOGRAPHICS: sociodemographics_participant.csv      #########
+#########    OTHER DISEASES: other_diseases_participant.csv            #########
+#########    DIABETES: diabetes3_participant.csv                       #########
+########                                                               #########
+########     these variables were downloaded separately owing to       #########
+########     limited capacity of UKBRAP to store lots of variables     #########
+########     at once in a data table                                   #########
+#################################################################################
+
+
+
+
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
+
+
+################################################################################
+##################### READING IN SURVIVAL COVARIATES  ##########################
+################################################################################
+
+
+# reading in the file which has survivor variables like age of recruitment etc. 
+
+library(tidyverse)
+library(dplyr)
+library(survival)
+library(lubridate)
+library(stringr)
+library(cli)
+library(data.table)
+library(ggplot2)
+
 setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
 
 
@@ -23,6 +71,8 @@ surv <- read.csv("TestosteroneCAD/data_participant_surv_2.csv")
 colnames(surv) <- c("IID", "T", "CAD", "AGERECRUIT", "MONTHBIRTH", "YEARBIRTH", "LTF", "DATEASSESSMENT")
 
 surv <- surv %>% select(-CAD)
+
+
 
 ################################################################################
 ######################### DATING AND PHENOTYPING CAD PHENOTYPES  ###############
@@ -299,9 +349,10 @@ phenotypes_condensed <- phenotypes_all %>% select("IID", "T", "CADBIN", "earlies
 
 
 surv <- merge(phenotypes_condensed, surv, by = "IID", all.x = TRUE)
-
+names(surv)[names(surv) == "T.x"] <- "T"
 surv <- surv %>% select(-"T.y")
-surv <- surv %>% rename("T" = "T.x")
+
+colnames(surv)
 
 
 ########### CALCULATING SURVIVOR VARIABLES - DATES ETC. #########################
@@ -812,25 +863,15 @@ sum(cleaned_data$CADBIN.x==1)
 
 table(cleaned_data$date_comparison, useNA = "ifany")
 
-sum(complete.cases(cleaned_data))
-
-summary(complete_data$timetoEVENT)
-
-
-
 write.csv(cleaned_data, file = "COMPLETE_SURV_DATA.csv", row.names = TRUE)
 
 
 
-
-####### THIS SCRIPT ALSO EXISTS IN THE q_risk_time_in_biobank 0907.R script
+###### THIS SCRIPT ALSO EXISTS IN THE q_risk_time_in_biobank 0907.R script
 ####### in your local environment 
 ####### that script contains the data cleaning 
 ####### in this section of the script we are running the models as this 
 ####### is the part that cannot be done in R 
-
-
-
 
 install.packages("tidyverse")
 install.packages("survival")
@@ -852,6 +893,8 @@ cleaned_data <- cleaned_data %>% select(-c("date_comparison"))
 
 
 complete_data <- cleaned_data[complete.cases(cleaned_data), ]
+
+nrow(complete_data)
 
 qrisksurv <- complete_data
 
@@ -938,7 +981,7 @@ CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
 # Fit Kaplan-Meier survival curves
 km_fit <- survfit(CADsurv ~ testosterone_binary, data = complete_data)
 
-dev.off()
+
 
 plot(
   km_fit,
@@ -1182,120 +1225,37 @@ km_fit <- survfit(CADsurv ~ testosterone_quartile, data = complete_data)
 
 
 cox_model <- coxph(CADsurv~testosterone_quartile, data = complete_data)
-summary(cox_model)
+summary_cox <- summary(cox_model)
 
 
 
 
+# Extracting the coefficients table
+coef_table <- summary_cox$coefficients
+
+# Extracting the confidence intervals
+conf_int <- summary_cox$conf.int
+
+# Creating the dataframe
+results_df <- data.frame(
+  coef = coef_table[, "coef"],
+  exp_coef = coef_table[, "exp(coef)"],
+  se_coef = coef_table[, "se(coef)"],
+  z = coef_table[, "z"],
+  Pr_z = coef_table[, "Pr(>|z|)"],
+  exp_coef_lower_95 = conf_int[, "lower .95"],
+  exp_coef_upper_95 = conf_int[, "upper .95"]
+)
+
+# Adding row names
+rownames(results_df) <- rownames(coef_table)
+
+# Display the dataframe
+print(results_df)
 
 
 
-
-
-
-df_40_50 <- filter(complete_data, age_group == "40-45" | age_group == "45-50")
-df_50_60 <- filter(complete_data, age_group == "50-55" | age_group == "55-60")
-df_60plus <- filter(complete_data, age_group == "60-65" | age_group == "65-70" | age_group == "70+")
-
-
-
-
-CADsurv <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
-cox_model1 <- coxph(CADsurv~testosterone_quartile, data = df_40_50)
-summary(cox_model1)
-
-CADsurv <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
-cox_model2 <- coxph(CADsurv~testosterone_quartile, data = df_50_60)
-summary(cox_model2)
-
-CADsurv <- Surv(time = df_60plus$timetoEVENT, event = df_60plus$CADBIN)
-cox_model3 <- coxph(CADsurv~testosterone_quartile, data = df_60plus)
-summary(cox_model3)
-
-
-
-
-table(df_40_50$testosterone_quartile, df_40_50$CADBIN)
-df_40_50 %>%
-  group_by(testosterone_quartile) %>%
-  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
-
-
-table(df_50_60$testosterone_quartile, df_50_60$CADBIN)
-df_50_60 %>%
-  group_by(testosterone_quartile) %>%
-  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
-
-table(df_60plus$testosterone_quartile, df_60plus$CADBIN)
-df_60plus %>%
-  group_by(testosterone_quartile) %>%
-  summarize(total_timetoEVENT = sum(timetoEVENT, na.rm = TRUE))
-
-
-
-# Load necessary library
-library(survival)
-
-# Assuming df_40_50, df_50_60, and df_60plus already exist with the required columns
-
-# Define a function to extract model summary
-extract_cox_summary <- function(cox_model, model_name) {
-  cox_summary <- summary(cox_model)
-  data.frame(
-    model = model_name,
-    variable = rownames(cox_summary$coefficients),
-    exp_coef = cox_summary$coefficients[, "exp(coef)"],
-    p_value = cox_summary$coefficients[, "Pr(>|z|)"],
-    lower_ci = cox_summary$conf.int[, "lower .95"],
-    upper_ci = cox_summary$conf.int[, "upper .95"]
-  )
-}
-
-# Model 1: Age 40-50
-CADsurv_40_50 <- Surv(time = df_40_50$timetoEVENT, event = df_40_50$CADBIN)
-cox_model1 <- coxph(CADsurv_40_50 ~ testosterone_quartile, data = df_40_50)
-results1 <- extract_cox_summary(cox_model1, "40-50")
-
-# Model 2: Age 50-60
-CADsurv_50_60 <- Surv(time = df_50_60$timetoEVENT, event = df_50_60$CADBIN)
-cox_model2 <- coxph(CADsurv_50_60 ~ testosterone_quartile, data = df_50_60)
-results2 <- extract_cox_summary(cox_model2, "50-60")
-
-# Model 3: Age 60+
-CADsurv_60plus <- Surv(time = df_60plus$timetoEVENT, event = df_60plus$CADBIN)
-cox_model3 <- coxph(CADsurv_60plus ~ testosterone_quartile, data = df_60plus)
-results3 <- extract_cox_summary(cox_model3, "60+")
-
-# Combine results into one dataframe
-combined_results <- rbind(results1, results2, results3)
-
-# Print or view the combined results dataframe
-print(combined_results)
-
-
-write.csv(combined_results, file = "combined_cox_model_results.csv", row.names = FALSE)
-
-
-
-
-
-
-
-# fitting an interaction cox model 
-
-
-
-# Create survival object
-CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
-
-
-cox <- coxph(CADsurv~complete_data$T*complete_data$AGERECRUIT.x)
-summary(cox) 
-
-
-cox <- coxph(CADsurv~complete_data$testosterone_quartile*complete_data$age_group)
-summary(cox) 
-
+write.csv(results_df, file = "quartile_stratified.csv", row.names = TRUE)
 
 
 
@@ -1306,96 +1266,80 @@ summary(cox)
 person_years <- read.csv("TestosteroneCAD/Data_from_RAP/cardiovascular_disease_rates.csv")
 cox_model_all_mediators <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_results.csv")
 cox_model_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/combined_cox_model_results.csv")
+quartile_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/quartile_stratified.csv")
+clinical <- read.csv("TestosteroneCAD/Data_from_RAP/clinical_T_cox.csv")
+
+##### PLOTTING THE CAD HAZARDS FOR TESTOSTERONE QUARTILES IN THE WHOLE 
+#### POPULATION 
+
+names(quartile_stratified)[names(quartile_stratified) == "X"] <- "T_QUARTILE"
+print(quartile_stratified)
 
 
+# Reorder the factor levels for T_QUARTILE
+quartile_stratified$T_QUARTILE <- factor(quartile_stratified$T_QUARTILE,
+                                         levels = c("lower", "lower middle", "upper middle", "upper"))
 
+# Custom colors for testosterone quartiles
+testosterone_colors <- c("lower" = "#66c2a5", "lower middle" = "#fc8d62", "upper middle" = "#8da0cb", "upper" = "#e78ac3")
 
-
-# Convert model to factor to control order
-cox_model_stratified$model <- factor(cox_model_stratified$model, levels = c("40-50", "50-60", "60+"))
-
-# Convert testosterone.quartile to factor with desired order
-# We want "upper" to appear last within each model level
-cox_model_stratified$testosterone.quartile <- factor(cox_model_stratified$testosterone.quartile,
-                                                     levels = c("lower", "lower middle", "upper middle", "upper"))
-
-# Plotting using ggplot2
-ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
-  geom_point(position = position_dodge(width = 0.3), size = 3) +
-  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
-  labs(title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
-       x = "Age Group",
-       y = "Hazard Ratio (exp_coef)",
-       color = "Testosterone Status") +
+# Create the forest plot without a legend
+plot <- ggplot(quartile_stratified, aes(x = T_QUARTILE, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95, color = T_QUARTILE)) +
+  geom_point(position = position_dodge(width = 0.3), size = 4) +
+  geom_errorbar(position = position_dodge(width = 0.6), width = 0.2) +
+  labs(title = "Hazard Ratios of CAD by Testosterone Quartile",
+       x = "Testosterone Quartile",
+       y = "Hazard Ratio of CAD") +
+  scale_color_manual(values = testosterone_colors, guide = FALSE) +  # Use custom colors without legend
   theme_minimal() +
-  theme(axis.text.y = element_text(size = 10)) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "black")  # Add a line at HR = 1 (null effect)
+  theme(axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size = 14)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
 
 
-testosterone_colors <- c("lower" = "#66c2a5",          # greenish
-                         "lower middle" = "#fc8d62",   # reddish
-                         "upper middle" = "#8da0cb",   # bluish
-                         "upper" = "#e78ac3")          # pinkish
+print(plot)
 
-# Plotting using ggplot2
-plot <- ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
+ggsave("forest_plot_quartiles.png", plot = plot, width = 8, height = 6, dpi = 300)
+
+########### CREATING A FOREST PLOT BASED ON CLINICAL VALUES OF TESTOSTERONE 
+########## AS OPPOSED TO THE QUARTILES IN THE DISTRIBUTION 
+
+ 
+print(clinical)
+
+
+names(clinical)[names(clinical) == "X"] <- "clinical_T"
+
+
+# Ensure clinical_T is a factor with the correct order of levels
+clinical$clinical_T <- factor(clinical$clinical_T, levels = c("very-low", "low", "standard", "high"))
+
+# Custom colors for clinical T categories in desired order
+clinical_colors <- c("very-low" = "#fc8d62", "low" = "#66c2a5", "standard" = "#8da0cb", "high" = "#e78ac3")
+
+# Create the forest plot with reordered levels
+plot <- ggplot(clinical, aes(x = clinical_T, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95, color = clinical_T)) +
   geom_point(position = position_dodge(width = 0.3), size = 3) +
   geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
-  labs(title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
-       x = "Age Group",
+  labs(title = "Hazard Ratios of Incident CAD by Clinical Testosterone Levels",
+       x = "Clinical Testosterone Level",
        y = "Hazard Ratio",
-       color = "Testosterone Status") +
-  scale_color_manual(values = testosterone_colors) +  # Use custom colors
+       color = "Clinical Testosterone Level") +
+  scale_color_manual(values = clinical_colors) +  # Use custom colors with reordered levels
   theme_minimal() +
   theme(axis.text.y = element_text(size = 10)) +
   geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
   theme(panel.grid.major.x = element_blank(),
-        panel.grid.minor.x = element_blank())  # Remove horizontal gridlines for cleaner look
+        panel.grid.minor.x = element_blank(),  # Remove horizontal gridlines for cleaner look
+        axis.text.x = element_text(angle = 45, hjust = 1)) 
 
-
-
-
-ggsave("forest_plot_age_stratified.png", plot = plot, width = 8, height = 6, dpi = 300)
-
-
-
-
-plot <- ggplot(cox_model_stratified, aes(x = model, y = exp_coef, ymin = lower_ci, ymax = upper_ci, color = testosterone.quartile)) +
-  geom_point(position = position_dodge(width = 0.3), size = 3) +
-  geom_errorbar(position = position_dodge(width = 0.3), width = 0.2) +
-  labs(
-    title = "Forest Plot of Hazard Ratios by Testosterone Status and Age",
-    x = "Age Group",
-    y = "Hazard Ratio",
-    color = "Testosterone Status"
-  ) +
-  scale_color_manual(values = testosterone_colors) +  # Use custom colors
-  theme_minimal() +
-  theme(
-    axis.text.y = element_text(size = 12),  # Increase y-axis text size
-    axis.text.x = element_text(size = 12),  # Increase x-axis text size
-    axis.title.x = element_text(size = 14), # Increase x-axis title size
-    axis.title.y = element_text(size = 14), # Increase y-axis title size
-    plot.title = element_text(size = 16, face = "bold"), # Increase plot title size and make it bold
-    legend.text = element_text(size = 12),  # Increase legend text size
-    legend.title = element_text(size = 14)  # Increase legend title size
-  ) +
-  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
-  theme(
-    panel.grid.major.x = element_blank(),
-    panel.grid.minor.x = element_blank()
-  )
-
-
-
-
-
-
-
-
-
-
-
+# Print the plot
+print(plot)
 
 
 
