@@ -113,6 +113,7 @@ relevant_icd10 <- icd10_2 %>%
   filter(grepl(paste(patterns, collapse = "|"), diag_icd10))
 
 
+
 # then merge with the file which has all the dates to make it possible 
 # to date the cardiovascular conditions 
 # the different columns from the ICD_10_1 file represent 
