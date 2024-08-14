@@ -11,22 +11,22 @@ library(MendelianRandomization)
 setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
 
 # looking at the allele matching and frequencies etc.
-M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_T_FG.xlsx", sheet = "T&P E&O")
+M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_T_FG.xlsx", sheet = "T&P E&O2")
+View(M_T_proxies_output)
 
 M_T_proxies_output <- M_T_proxies_output[!M_T_proxies_output$rsid == "rs56196860", ]
 
-allele_matching <- select(M_T_proxies_output, "SNP", "ALLELE1", "ALLELE0", "A1FREQ", "BETA", "SE", "a1", "a2", "beta", "se" )
+allele_matching <- select(M_T_proxies_output, "Signal", "Trait_raising", "Other_allele", "Weight", "SE_weight", "a1", "a2", "beta", "se" )
 
 
 # renaming the columns for ease of use 
 allele_matching <- allele_matching %>%
   rename(
-    SNP_T = "SNP",
-    Effect_allele_T = "ALLELE1",
-    Reference_allele_T = "ALLELE0",
-    EA_FREQ_T = "A1FREQ",
-    BETA_T = "BETA",
-    SE_T = "SE",
+    SNP_T = "Signal",
+    Effect_allele_T = "Trait_raising",
+    Reference_allele_T = "Other_allele",
+    BETA_T = "Weight",
+    SE_T = "SE_weight",
     Reference_allele_FG = "a2",
     Effect_allele_FG = "a1",
     male_beta_FG = "beta",
