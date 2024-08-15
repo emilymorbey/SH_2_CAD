@@ -11,7 +11,7 @@ library(MendelianRandomization)
 setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
 
 # looking at the allele matching and frequencies etc.
-M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_T_FG.xlsx", sheet = "T&P E&O2")
+M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_Testosterone_AND_FG.xlsx", sheet = "Sheet3")
 View(M_T_proxies_output)
 
 M_T_proxies_output <- M_T_proxies_output[!M_T_proxies_output$rsid == "rs56196860", ]
