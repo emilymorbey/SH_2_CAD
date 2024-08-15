@@ -1407,8 +1407,9 @@ head(decile_stratified)
 print(decile_stratified)
 
 decile_stratified$X <- factor(decile_stratified$X,
-                                         levels = c("testosterone_decile1", "testosterone_decile2", "testosterone_decile3", "testosterone_decile4", "testosterone_decile5",
-                                                    "testosterone_decile6", "testosterone_decile7", "testosterone_decile8", "testosterone_decile9", "testosterone_decile10"))
+                                         levels = c("0.4-7.7", "7.7-8.9", "8.9-9.9", 
+                                         "9.9-10.7", "10.7-11.6", "11.6-12.5", "12.5-13.5",
+                                         "13.5-14.8", "14.8-16.7", "16.7-53.1"))
 
 print(decile_stratified)
 
@@ -1417,8 +1418,7 @@ print(decile_stratified)
 plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95)) +
   geom_point(position = position_dodge(width = 0.3), size = 4) +
   geom_errorbar(position = position_dodge(width = 0.6), width = 0.2) +
-  labs(title = "Hazard Ratios of CAD by Testosterone Decile",
-       x = "Testosterone Decile",
+  labs(x = "Testosterone Deciles (nmol/L)",
        y = "Hazard Ratio of CAD") +
   theme_minimal() +
   theme(axis.text.y = element_text(size = 12),
@@ -1432,6 +1432,31 @@ plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower
 
 
 print(plot)
+
+
+library(ggplot2)
+
+plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95)) +
+  geom_point(position = position_dodge(width = 0.5), size = 4, color = "blue") +
+  geom_errorbar(position = position_dodge(width = 0.5), width = 0.3, color = "blue") +
+  labs(x = "Testosterone Deciles (nmol/L)",
+       y = "Hazard Ratio of CAD") +
+  theme_minimal(base_size = 15) +  # Base font size for better readability
+  theme(axis.text.y = element_text(size = 14),
+        axis.text.x = element_text(size = 14, angle = 45, hjust = 1),
+        axis.title.x = element_text(size = 16),
+        axis.title.y = element_text(size = 16),
+        panel.grid.major = element_line(linewidth = 0.5, color = "grey90"),  # Use linewidth instead of size
+        panel.grid.minor = element_blank(),  # Remove minor grid lines
+        panel.border = element_rect(color = "black", fill = NA, linewidth = 0.5)) +  # Use linewidth instead of size
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black", linewidth = 0.8)  # Use linewidth instead of size
+
+print(plot)
+
+
+
+
+
 
 ggsave("forest_plot_quartiles.png", plot = plot, width = 8, height = 6, dpi = 300)
 
