@@ -215,3 +215,100 @@ inverse_weighted_LR <- lm(allele_matching$HARM_MALE_BETA_CAD ~ allele_matching$A
 summary(inverse_weighted_LR)
 
 abline(inverse_weighted_LR, col = "red")
+
+
+
+
+#### USING WEIGHTS FROM CLUSTER 
+
+
+##################################################################################
+
+# HARMONISATION AND MR
+
+##################################################################################
+library(tidyverse)
+library(readxl)
+library(MendelianRandomization)
+
+
+setwd("C:/Users/emorb/OneDrive - University of Cambridge/PhD/MR/Testosterone_CAD_MR/Testosterone CAD MR R files")
+
+M_T_proxies_output <- read_excel("TestosteroneCAD/not found inputs/SNPs_M_Testosterone_AND_CAD.xlsx", sheet = "all 3")
+M_T_proxies_output <- M_T_proxies_output[!M_T_proxies_output$Signal == "rs56196860", ]
+
+head(M_T_proxies_output)
+View(M_T_proxies_output)
+### selecting appropriate columns for harmonisation 
+
+allele_matching <- select(M_T_proxies_output, "Signal", "Trait_raising", "Other_allele", "Weight", "SE_weight", "reference_allele", "other_allele", "male_beta", "male_se" )
+
+# renaming the columns for ease of use 
+allele_matching <- allele_matching %>%
+  rename(
+    SNP_T = "Signal",
+    Effect_allele_T = "Trait_raising",
+    Reference_allele_T = "Other_allele",
+    BETA_T = "Weight",
+    SE_T = "SE_weight",
+    Reference_allele_CAD = "reference_allele",
+    Effect_allele_CAD = "other_allele",
+    male_beta_CAD = "male_beta",
+    male_se_CAD = "male_se"
+  )
+
+# identify trait increasing allele for Testosterone
+# here we are saying, if beta is negative, then the reference allele is the trait increasing allele, if beta is positive, then the effect allele is the trait increasing allele
+
+allele_matching$T_inc_allele <- if_else(allele_matching$BETA_T<0, allele_matching$Reference_allele_T, 
+                                           allele_matching$Effect_allele_T)
+
+
+
+### setting the betas as numeric 
+
+allele_matching$BETA_T <- as.numeric(allele_matching$BETA_T)
+allele_matching$ABS_BETA_T <- abs(allele_matching$BETA_T)
+
+# harmonising so the effect alleles for CAD and Testosterone are the same
+# changing the betas of the CAD SNPs to match the new effect allele for CAD
+
+allele_matching$male_beta_CAD <- as.numeric(allele_matching$male_beta_CAD)
+
+# here we are saying, if the trait increasing allele for Testosterone is not the same as the effect allele for CAD, then the beta for CAD is multiplied by -1, otherwise it is the same
+
+allele_matching$HARM_MALE_BETA_CAD <- if_else(allele_matching$T_inc_allele!=allele_matching$Effect_allele_CAD,
+                                              allele_matching$male_beta_CAD*-1, allele_matching$male_beta_CAD)
+
+
+
+## manually running the IVW method
+
+plot(allele_matching$ABS_BETA_T, allele_matching$HARM_MALE_BETA_CAD)
+allele_matching$male_se_CAD <- as.numeric(allele_matching$male_se_CAD)
+IVW_weights <- allele_matching$male_se_CAD^-2 
+inverse_weighted_LR <- lm(allele_matching$HARM_MALE_BETA_CAD ~ allele_matching$ABS_BETA_T- 1 ,weights=IVW_weights)
+summary(inverse_weighted_LR)
+abline(inverse_weighted_LR, col="red")
+summary_model <- summary(inverse_weighted_LR)
+summary_model
+
+### making some more things numeric 
+
+M_T_proxies_output$male_beta <- as.numeric(M_T_proxies_output$male_beta)
+allele_matching$ABS_BETA_T <- as.numeric(allele_matching$ABS_BETA_T)
+allele_matching$male_se_CAD <- as.numeric(allele_matching$male_se_CAD)
+allele_matching$SE_T <- as.numeric(allele_matching$SE_T)
+
+### running all models using the MR package
+
+MRObject = mr_input(bx = allele_matching$ABS_BETA_T, bxse = allele_matching$SE_T, 
+                    by = allele_matching$HARM_MALE_BETA_CAD, byse = allele_matching$male_se_CAD, snps = allele_matching$SNP_T)
+
+mr_ivw(MRObject)
+mr_egger(MRObject)
+mr_median(MRObject)
+
+mr_allmethods(MRObject)
+mr_plot(mr_allmethods(MRObject))
+
