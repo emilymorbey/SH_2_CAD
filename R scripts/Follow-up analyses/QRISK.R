@@ -1205,7 +1205,96 @@ write.csv(results, file = "cox_model_results.csv", row.names = TRUE)
 
 
 
-### now having a LOOK AT THE DISTRIBUTION BY AGES ############################
+
+
+
+
+
+### now having a LOOK AT THE DISTRIBUTION BY DECILES ############################
+
+complete_data <- complete_data %>%
+  mutate(testosterone_decile = ntile(T, 10))
+
+complete_data <- complete_data %>%
+  mutate(testosterone_decile = ntile(T, 10)) %>%
+  mutate(testosterone_decile = factor(testosterone_decile)) %>%
+  mutate(testosterone_decile = fct_relevel(testosterone_decile, "7"))
+
+
+# Check the factor levels to confirm releveling
+levels(complete_data$testosterone_decile)
+
+
+decile_ranges <- complete_data %>%
+  group_by(testosterone_decile) %>%
+  summarise(
+    min_value = min(T),
+    max_value = max(T),
+    .groups = 'drop'
+  )
+
+
+# Create survival object
+CADsurv <- Surv(time = complete_data$timetoEVENT, event = complete_data$CADBIN)
+
+# Fit Kaplan-Meier survival curves
+km_fit <- survfit(CADsurv ~ testosterone_decile + AGERECRUIT.x, data = complete_data)
+
+print(km_fit)
+
+
+
+cox_model <- coxph(CADsurv~testosterone_decile+AGERECRUIT.x, data = complete_data)
+summary_cox <- summary(cox_model)
+
+
+
+
+# Extracting the coefficients table
+coef_table <- summary_cox$coefficients
+
+# Extracting the confidence intervals
+conf_int <- summary_cox$conf.int
+
+# Creating the dataframe
+results_df <- data.frame(
+  coef = coef_table[, "coef"],
+  exp_coef = coef_table[, "exp(coef)"],
+  se_coef = coef_table[, "se(coef)"],
+  z = coef_table[, "z"],
+  Pr_z = coef_table[, "Pr(>|z|)"],
+  exp_coef_lower_95 = conf_int[, "lower .95"],
+  exp_coef_upper_95 = conf_int[, "upper .95"]
+)
+
+# Adding row names
+rownames(results_df) <- rownames(coef_table)
+
+# Display the dataframe
+print(results_df)
+
+
+
+write.csv(results_df, file = "decile_stratified.csv", row.names = TRUE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+### now having a LOOK AT THE DISTRIBUTION BY QUARTILES ############################
 
 
 complete_data$testosterone_quartile <- factor(complete_data$testosterone_quartile, 
@@ -1225,7 +1314,7 @@ km_fit <- survfit(CADsurv ~ testosterone_quartile, data = complete_data)
 
 
 
-cox_model <- coxph(CADsurv~testosterone_quartile, data = complete_data)
+cox_model <- coxph(CADsurv~testosterone_quartile + AGERECRUIT.x, data = complete_data)
 summary_cox <- summary(cox_model)
 
 
@@ -1269,6 +1358,7 @@ cox_model_all_mediators <- read.csv("TestosteroneCAD/Data_from_RAP/cox_model_res
 cox_model_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/combined_cox_model_results.csv")
 quartile_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/quartile_stratified.csv")
 clinical <- read.csv("TestosteroneCAD/Data_from_RAP/clinical_T_cox.csv")
+decile_stratified <- read.csv("TestosteroneCAD/Data_from_RAP/decile_stratified.csv")
 
 ##### PLOTTING THE CAD HAZARDS FOR TESTOSTERONE QUARTILES IN THE WHOLE 
 #### POPULATION 
@@ -1306,6 +1396,49 @@ plot <- ggplot(quartile_stratified, aes(x = T_QUARTILE, y = exp_coef, ymin = exp
 print(plot)
 
 ggsave("forest_plot_quartiles.png", plot = plot, width = 8, height = 6, dpi = 300)
+
+
+
+
+
+##### PLOTTING THE CAD HAZARDS FOR TESTOSTERONE DECILES IN THE WHOLE 
+#### POPULATION 
+head(decile_stratified)
+print(decile_stratified)
+
+decile_stratified$X <- factor(decile_stratified$X,
+                                         levels = c("testosterone_decile1", "testosterone_decile2", "testosterone_decile3", "testosterone_decile4", "testosterone_decile5",
+                                                    "testosterone_decile6", "testosterone_decile7", "testosterone_decile8", "testosterone_decile9", "testosterone_decile10"))
+
+print(decile_stratified)
+
+
+# Create the forest plot without a legend
+plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95)) +
+  geom_point(position = position_dodge(width = 0.3), size = 4) +
+  geom_errorbar(position = position_dodge(width = 0.6), width = 0.2) +
+  labs(title = "Hazard Ratios of CAD by Testosterone Decile",
+       x = "Testosterone Decile",
+       y = "Hazard Ratio of CAD") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 12),
+        axis.text.x = element_text(size = 12),
+        axis.title.x = element_text(size=14),
+        axis.title.y = element_text(size = 14)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1))
+
+
+print(plot)
+
+ggsave("forest_plot_quartiles.png", plot = plot, width = 8, height = 6, dpi = 300)
+
+
+
+
+
 
 ########### CREATING A FOREST PLOT BASED ON CLINICAL VALUES OF TESTOSTERONE 
 ########## AS OPPOSED TO THE QUARTILES IN THE DISTRIBUTION 
