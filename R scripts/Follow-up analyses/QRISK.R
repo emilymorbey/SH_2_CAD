@@ -1416,19 +1416,20 @@ print(decile_stratified)
 
 # Create the forest plot without a legend
 plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95)) +
-  geom_point(position = position_dodge(width = 0.3), size = 4) +
-  geom_errorbar(position = position_dodge(width = 0.6), width = 0.2) +
+  geom_point(position = position_dodge(width = 0.3), size = 5) +
+  geom_errorbar(position = position_dodge(width = 1.2), width = 0.4) +
   labs(x = "Testosterone Deciles (nmol/L)",
-       y = "Hazard Ratio of CAD") +
+       y = "CAD Hazard Ratio") +
   theme_minimal() +
-  theme(axis.text.y = element_text(size = 12),
-        axis.text.x = element_text(size = 12),
-        axis.title.x = element_text(size=14),
-        axis.title.y = element_text(size = 14)) +
+  theme(axis.text.y = element_text(size = 25),
+        axis.text.x = element_text(size = 20),
+        axis.title.x = element_text(size=24),
+        axis.title.y = element_text(size = 24)) +
   geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
   theme(panel.grid.major.x = element_blank(),
         panel.grid.minor.x = element_blank(),
-        axis.text.x = element_text(angle = 45, hjust = 1))
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+
 
 
 print(plot)
@@ -1457,8 +1458,54 @@ print(plot)
 
 
 
+plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95, color = X)) +
+  geom_point(position = position_dodge(width = 0.3), size = 5) +
+  geom_errorbar(position = position_dodge(width = 1.2), width = 0.4) +
+  labs(x = "Testosterone Deciles (nmol/L)",
+       y = "CAD Hazard Ratio") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 25),
+        axis.text.x = element_text(size = 20),
+        axis.title.x = element_text(size = 24),
+        axis.title.y = element_text(size = 24)) +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_viridis_d() # Example using viridis color scale
 
-ggsave("forest_plot_quartiles.png", plot = plot, width = 8, height = 6, dpi = 300)
+print(plot)
+
+
+library(ggplot2)
+library(viridis)  # For the viridis color scale
+
+plot <- ggplot(decile_stratified, aes(x = X, y = exp_coef, ymin = exp_coef_lower_95, ymax = exp_coef_upper_95)) +
+  # Add colored points
+  geom_point(aes(color = X), position = position_dodge(width = 0.3), size = 4) +
+  # Add black error bars
+  geom_errorbar(color = "black", position = position_dodge(width = 1.2), width = 0.4) +
+  labs(x = "Testosterone Deciles (nmol/L)",
+       y = "CAD Hazard Ratio") +
+  theme_minimal() +
+  theme(axis.text.y = element_text(size = 16),
+        axis.text.x = element_text(size = 16),
+        axis.title.x = element_text(size=18),
+        axis.title.y = element_text(size = 18),
+        legend.position = "none") +
+  geom_hline(yintercept = 1, linetype = "dashed", color = "black") +  # Add a line at HR = 1 (null effect)
+  theme(panel.grid.major.x = element_blank(),
+        panel.grid.minor.x = element_blank(),
+        axis.text.x = element_text(angle = 45, hjust = 1)) +
+  scale_color_viridis_d()  # Apply the viridis color scale
+
+print(plot)
+
+
+
+
+
+ggsave("forest_plot_deciles.png", plot = plot, width = 8, height = 6, dpi = 300)
 
 
 
